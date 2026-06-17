@@ -2685,15 +2685,13 @@ function rebuildProModels(onlyShop){
     var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
     var preds=proShopPreds(targetShop);
 
-    // ── PHASE 1: Fast core (shown immediately) ──
-    var wf=runWalkForward(sorted);
-    var kf=runKFoldCV(sorted,5);
-    var ensResult=buildEnsembleScores(sorted,wf.modelAvg);
+    // ── CORE: Single ensemble scoring (fast) ──
+    var ensResult=buildEnsembleScores(sorted,null);
     var top5=Object.entries(ensResult.ensemble).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
     var calibParams=fitPlattParams(preds,ensResult.ensemble);
     var calibProbs=plattScale(ensResult.ensemble,calibParams);
 
-    // Bootstrap CI — 20 boots (reduced from 60, same accuracy)
+    // Bootstrap CI — 20 boots, only for top-5 codes
     var ciData={};
     top5.forEach(function(x){ciData[x[0]]=bootstrapCI(sorted,x[0],20);});
 
@@ -2713,12 +2711,13 @@ function rebuildProModels(onlyShop){
     var similarity=buildHistoricalSimilarity(sorted,3);
     var rcs=buildRefillConfidenceScore(sorted,preds,top5Codes,bcsResult,targetShop);
 
-    // Store models (perm importance added in phase 2)
+    // Store models — walk-forward/kfold/permImportance computed lazily in renderAnalyze
     db.shops[targetShop].models={
-      walkForward:wf,kFold:kf,
+      walkForward:null,      // computed lazily
+      kFold:null,            // computed lazily
+      permImportance:null,   // computed lazily
       ensembleScores:ensScores,modelScores:ensResult.modelScores,
       calibParams:calibParams,calibProbs:calibProbs,ciData:ciData,
-      permImportance:{importance:{},baseline:0}, // placeholder until phase 2
       regime:regime,codeStates:codeStates,
       momentum:momResult,patterns:patterns,cooccur:cooccur,
       similarity:similarity,watchouts:watchouts,
@@ -2726,8 +2725,6 @@ function rebuildProModels(onlyShop){
       snapshots:snapshots,weights:weights,
       top5:top5Codes,builtAt:new Date().toISOString()
     };
-
-    // Store full scores map for triggered outcome scoring
     db.shops[targetShop].lastFullScores=ensScores;
 
     // Auto-generate pending prediction
@@ -2747,27 +2744,13 @@ function rebuildProModels(onlyShop){
     saveDB(db);
     learnAndStoreThresholds(targetShop);
 
-    var msg='✅ '+targetShop+' models trained — '+wf.avgSlotCov+'% slot cov (WF) · '+kf.avgSlotCov+'±'+kf.stdSlotCov+'% (k-fold) · Computing signal importance…';
-    document.getElementById('rebuild-result').innerHTML='<div class="alert alert-success">'+msg+'</div>';
+    document.getElementById('rebuild-result').innerHTML='<div class="alert alert-success">✅ '+targetShop+' models trained. Open Analyze tab to run full validation.</div>';
     if(navigator.vibrate) navigator.vibrate([30,20,30,20,80]);
     renderShopPills();
     renderRebuildPills();
     if(curPanel()==='predict') renderPredict();
     if(curPanel()==='analyze') renderAnalyze();
     if(curPanel()==='track')   renderTrack();
-
-    // ── PHASE 2: Deferred — permutation importance (slow, non-blocking) ──
-    setTimeout(function(){
-      var permResult=computePermImportance(sorted);
-      db=loadDB();
-      if(db.shops[targetShop]&&db.shops[targetShop].models){
-        db.shops[targetShop].models.permImportance=permResult;
-        saveDB(db);
-      }
-      var el=document.getElementById('rebuild-result');
-      if(el) el.innerHTML='<div class="alert alert-success">✅ '+targetShop+' fully trained — '+wf.avgSlotCov+'% slot cov (WF) · Signal importance ready.</div>';
-      if(curPanel()==='analyze') renderAnalyze();
-    }, 100);
 
   },50);
 }
@@ -2789,30 +2772,18 @@ function autoResolveEntry(date, codes){
     p.totalSlots=codes.length;
     p.status=resolveStatus(outcome);
     p.outcome=outcome;p.actualDate=date;p.actualCodes=Array.from(new Set(codes));
-    // Track triggered outcomes
+    // Track triggered outcomes — use lastFullScores (normalised 0-100)
     var allTriggered=Array.from(new Set((p.promotedCodes||[]).concat(p.watchoutCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;})));
-    var maxS=Math.max.apply(null,Object.values(p.scores||{}).concat([0.001]));
+    var fullSc=db.shops[activeShop]&&db.shops[activeShop].lastFullScores||{};
     var triggeredOutcome={};
     allTriggered.forEach(function(c){
-      triggeredOutcome[c]={appeared:codes.indexOf(c)>-1,type:(p.promotedCodes&&p.promotedCodes.indexOf(c)>-1)?'promoted':'watchout',scorePct:p.scores&&p.scores[c]?Math.round(p.scores[c]/maxS*100):null};
+      triggeredOutcome[c]={
+        appeared:codes.indexOf(c)>-1,
+        type:(p.promotedCodes&&p.promotedCodes.indexOf(c)>-1)?'promoted':'watchout',
+        scorePct:fullSc[c]!=null?fullSc[c]:null
+      };
     });
     p.triggeredOutcome=triggeredOutcome;
-    // Track triggered outcomes
-    var allT=Array.from(new Set((p.promotedCodes||[]).concat(p.watchoutCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;})));
-    var mxS=Math.max.apply(null,Object.values(p.scores||{}).concat([0.001]));
-    var tOut={};
-    allT.forEach(function(c){tOut[c]={appeared:codes.indexOf(c)>-1,type:(p.promotedCodes&&p.promotedCodes.indexOf(c)>-1)?'promoted':'watchout',scorePct:p.scores&&p.scores[c]?Math.round(p.scores[c]/mxS*100):null};});
-    p.triggeredOutcome=tOut;
-    // Track triggered outcomes with full scores for non-top5 codes
-    var allT=Array.from(new Set((p.promotedCodes||[]).concat(p.watchoutCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;})));
-    var fullSc=db.shops[activeShop]&&db.shops[activeShop].lastFullScores||{};
-    var mxS=Math.max.apply(null,Object.values(fullSc).concat(Object.values(p.scores||{})).concat([0.001]));
-    var tOut={};
-    allT.forEach(function(c){
-      var sc=fullSc[c]||(p.scores&&p.scores[c])||0;
-      tOut[c]={appeared:codes.indexOf(c)>-1,type:(p.promotedCodes&&p.promotedCodes.indexOf(c)>-1)?'promoted':'watchout',scorePct:sc>0?Math.round(sc/mxS*100):null};
-    });
-    p.triggeredOutcome=tOut;
     changed=true;
   });
   if(changed){ saveDB(db); setTimeout(function(){learnAndStoreThresholds(activeShop);},100); }
@@ -2828,10 +2799,11 @@ function saveProEntry(){
   var entries=db.shops[activeShop].entries||[];
   var sig=date+'|'+codes.slice().sort().join(',');
   if(entries.some(function(e){return e.date+'|'+e.codes.slice().sort().join(',')===sig;})){showToast('Already exists');return;}
+  // Resolve pending prediction BEFORE adding new entry (preserves original scores)
+  autoResolveEntry(date,codes);
   entries.push({id:Date.now(),date:date,codes:codes,source:'manual'});
   entries.sort(function(a,b){return a.date.localeCompare(b.date);});
   db.shops[activeShop].entries=entries;
-  autoResolveEntry(date,codes);
   saveDB(db);
   document.getElementById('pro-codes').value='';
   document.getElementById('collect-result').innerHTML='<div class="alert alert-success">Saved '+codes.length+' codes for '+date+'. Run Rebuild to update ML models.</div>';
@@ -2886,13 +2858,13 @@ function renderPredict(){
   var ms2=models.modelScores||{};
   var wf=models.walkForward||{};
   var maxEns=top5.reduce(function(m,c){return Math.max(m,ens[c]||0);},0.001);
-  var avgCov=wf.avgSlotCov||0;
-  var confLevel=avgCov>=50?'high':avgCov>=30?'moderate':'low';
+  var avgCov=wf&&wf.avgSlotCov!=null?wf.avgSlotCov:null;
+  var confLevel=avgCov!=null?(avgCov>=50?'high':avgCov>=30?'moderate':'low'):'moderate';
   var confBadge=document.getElementById('model-conf-badge');
   if(confBadge){
     confBadge.className='verdict-'+confLevel;
     confBadge.style.cssText='font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;';
-    confBadge.textContent=verdictLabel(confLevel)+' · '+avgCov+'% slot cov';
+    confBadge.textContent=verdictLabel(confLevel)+(avgCov!=null?' · '+avgCov+'% slot cov':' · open Analyze for WF');
   }
   // Regime banner
   var regime=models.regime||{shifting:false};
@@ -3107,15 +3079,35 @@ function renderAnalyze(){
   db=loadDB();
   var models=proShopModels(activeShop);
   if(!models){
-    ['wf-chart','kfold-results','perm-importance','calib-curve','pro-thresholds','pro-patterns','pro-momentum','pro-regime']
+    ['wf-chart','kfold-results','perm-importance','signal-hit-rates','calib-curve','pro-thresholds','pro-patterns','pro-momentum','pro-regime']
       .forEach(function(id){var e=document.getElementById(id);if(e)e.innerHTML='<div style="color:var(--muted);font-size:12px">Run Rebuild first.</div>';});
     return;
   }
-  var wf=models.walkForward||{};
-  var kf=models.kFold||{};
-  var perm=models.permImportance||{};
   var entries=proShopEntries(activeShop);
   var preds=proShopPreds(activeShop);
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+
+  // ── Lazy compute expensive stats when Analyze tab first opened ──
+  if(!models.walkForward||!models.kFold||!models.permImportance){
+    var spinner='<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px">'
+      +'<div style="width:12px;height:12px;border:2px solid var(--teal);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div>'
+      +'Computing…</div>';
+    ['wf-chart','kfold-results','perm-importance'].forEach(function(id){
+      var e=document.getElementById(id); if(e&&!models[id==='wf-chart'?'walkForward':id==='kfold-results'?'kFold':'permImportance']) e.innerHTML=spinner;
+    });
+    setTimeout(function(){
+      db=loadDB(); var m=proShopModels(activeShop); if(!m) return;
+      if(!m.walkForward||!m.kFold){ m.walkForward=runWalkForward(sorted); m.kFold=runKFoldCV(sorted,5); }
+      if(!m.permImportance){ m.permImportance=computePermImportance(sorted); }
+      db.shops[activeShop].models=m; saveDB(db);
+      renderAnalyze();
+    },50);
+    // Still render the non-expensive sections below
+  }
+
+  var wf=models.walkForward||{steps:[],avgSlotCov:0,modelAvg:{}};
+  var kf=models.kFold||{folds:[],avgSlotCov:0,stdSlotCov:0};
+  var perm=models.permImportance||{importance:{},baseline:0};
 
   // Walk-forward chart
   var steps=wf.steps||[];
