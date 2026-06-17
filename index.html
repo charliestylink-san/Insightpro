@@ -1,0 +1,3777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>InsightPro</title>
+<style>
+:root{
+  --bg:#0a0b0e;--surface:#13151c;--surface2:#1a1d28;--border:#252836;
+  --amber:#f59e0b;--teal:#2dd4bf;--violet:#8b5cf6;--rose:#f43f5e;
+  --green:#10b981;--blue:#3b82f6;--muted:#6b7280;--text:#f1f5f9;
+  --mono:"SF Mono","Courier New",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,sans-serif;
+  --radius:12px;
+  --m-recency:#2dd4bf;--m-pattern:#8b5cf6;--m-quantity:#f59e0b;
+  --sig-freq:#3b82f6;--sig-recency:#2dd4bf;--sig-streak:#f97316;
+  --sig-bias:#a78bfa;--sig-cooccur:#34d399;--sig-interval:#fbbf24;
+  --sig-dow:#fb7185;--sig-cycle:#22d3ee;--sig-overdue:#f43f5e;
+  --sig-qtydom:#86efac;--sig-qtystreak:#bef264;--sig-momentum:#e879f9;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
+#app{max-width:430px;margin:0 auto;padding:env(safe-area-inset-top) 0 0}
+#header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--amber),var(--teal));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#000}
+.logo-text{font-size:18px;font-weight:800;letter-spacing:-.5px}
+.logo-text span{color:var(--amber)}
+.header-sub{font-size:10px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+#shop-bar{padding:8px 16px;display:flex;align-items:center;gap:8px;overflow-x:auto;border-bottom:1px solid var(--border)}
+.shop-pill{font-family:var(--mono);font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s}
+.shop-pill.active{background:var(--amber);color:#000;border-color:var(--amber)}
+.shop-pill-add{font-size:16px;padding:3px 10px;border-radius:20px;border:1px dashed var(--border);background:transparent;color:var(--muted);cursor:pointer}
+#nav{display:flex;overflow-x:auto;border-bottom:1px solid var(--border);padding:0 8px;gap:2px}
+.nav-btn{font-size:10px;font-weight:700;letter-spacing:.3px;padding:10px 12px;color:var(--muted);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;text-transform:uppercase;transition:all .15s}
+.nav-btn.active{color:var(--amber);border-bottom-color:var(--amber)}
+#content{flex:1;overflow-y:auto}
+.panel{display:none;padding:12px 16px 80px}
+.panel.active{display:block}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.card-title{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--amber);margin-bottom:10px}
+.card-sub{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px}
+.alert{padding:10px 14px;border-radius:10px;margin-bottom:10px;font-size:12px;line-height:1.5}
+.alert-success{background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:var(--green)}
+.alert-warn{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--amber)}
+.alert-error{background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.3);color:var(--rose)}
+.alert-info{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:var(--blue)}
+.btn{padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;border:none;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--amber);color:#000}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-small{padding:5px 10px;font-size:11px;border-radius:8px}
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-icon{font-size:36px;margin-bottom:12px}
+.freq-row{display:flex;align-items:center;gap:8px;padding:3px 0}
+.freq-code{font-family:var(--mono);font-weight:700;min-width:28px;font-size:12px}
+.freq-bar-wrap{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.freq-bar{height:100%;border-radius:3px}
+.freq-val{font-size:11px;font-family:var(--mono);color:var(--muted);min-width:40px;text-align:right}
+.sec-head{font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--teal);padding:12px 0 5px;border-bottom:1px solid var(--border);margin-bottom:8px}
+/* Prediction rows */
+.pred-row{display:grid;grid-template-columns:24px 32px 1fr 52px 44px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.pred-medal{font-size:14px;text-align:center}
+.pred-code{font-family:var(--mono);font-weight:900;font-size:16px}
+.pred-detail{font-size:10px;color:var(--muted);line-height:1.5}
+/* CI track */
+.ci-track{position:relative;height:8px;background:var(--surface2);border-radius:4px;margin:3px 0}
+.ci-range{position:absolute;height:100%;border-radius:4px;opacity:.4}
+.ci-point{position:absolute;width:3px;height:100%;background:var(--amber);border-radius:2px;transform:translateX(-50%)}
+/* Signal importance */
+.sig-imp-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border)}
+.sig-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sig-name{font-size:11px;color:var(--muted);min-width:88px}
+.sig-bar-wrap{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.sig-bar{height:100%;border-radius:3px}
+.sig-badge{font-size:9px;font-weight:800;padding:1px 5px;border-radius:6px;white-space:nowrap}
+.sb-key{background:rgba(16,185,129,.15);color:var(--green)}
+.sb-mod{background:rgba(245,158,11,.15);color:var(--amber)}
+.sb-low{background:rgba(107,114,128,.15);color:var(--muted)}
+/* Compare */
+.cmp-row{display:grid;grid-template-columns:1fr 36px 1fr;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);align-items:center}
+/* Watchout */
+.verdict-high{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3)}
+.verdict-moderate{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+.verdict-low{background:rgba(244,63,94,.15);color:var(--rose);border:1px solid rgba(244,63,94,.3)}
+.verdict-none{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+/* Inputs */
+.date-input,.codes-input,.text-input{width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:var(--sans)}
+.codes-input{font-family:var(--mono);letter-spacing:2px;min-height:70px;resize:none}
+::-webkit-scrollbar{width:0;height:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div class="logo">
+      <div class="logo-mark">IP</div>
+      <div>
+        <div class="logo-text">Insight<span>Pro</span></div>
+        <div class="header-sub">Professional ML Engine</div>
+      </div>
+    </div>
+    <span id="pwa-indicator" style="font-size:10px;color:var(--muted)"></span>
+  </div>
+  <div id="shop-bar"><button class="shop-pill-add" onclick="addShop()">+</button></div>
+  <div id="nav">
+    <button class="nav-btn active" onclick="showPanel('predict')" id="nav-predict">PREDICT</button>
+    <button class="nav-btn" onclick="showPanel('collect')" id="nav-collect">COLLECT</button>
+    <button class="nav-btn" onclick="showPanel('analyze')" id="nav-analyze">ANALYZE</button>
+    <button class="nav-btn" onclick="showPanel('compare')" id="nav-compare">COMPARE</button>
+    <button class="nav-btn" onclick="showPanel('track')" id="nav-track">TRACK</button>
+    <button class="nav-btn" onclick="showPanel('data')" id="nav-data">DATA</button>
+  </div>
+  <div id="content">
+
+    <!-- PREDICT -->
+    <div class="panel active" id="panel-predict">
+      <div class="card" style="border-color:var(--amber)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:11px;font-weight:800;color:var(--amber);letter-spacing:.5px">TOP 5 — NEXT REFILL</span>
+          <span id="model-conf-badge" style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--amber)">—</span>
+        </div>
+        <div id="refill-conf-score" style="margin-bottom:8px;display:none"></div>
+        <div id="plain-summary" style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px;padding:8px;background:var(--surface);border-radius:8px;display:none"></div>
+        <div id="predict-list"></div>
+        <div id="regime-banner" style="display:none;margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">ENSEMBLE AGREEMENT</div>
+        <div class="card-sub">Three sub-models weighted by walk-forward accuracy. Agreement = high confidence.</div>
+        <div id="ensemble-detail"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">CALIBRATED PROBABILITIES + 90% CI</div>
+        <div class="card-sub">Platt-scaled — 70% means historically appeared ~70% of the time at this score level.</div>
+        <div id="calibration-detail"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">CO-OCCURRENCE IMPLICATIONS</div>
+        <div class="card-sub">Additional codes implied by tight pairs with the top-5.</div>
+        <div id="pro-cooccur"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">WATCHOUTS — Outside top-5, triggered</div>
+        <div id="pro-watchouts"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">HISTORICAL SIMILARITY</div>
+        <div id="pro-similarity"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📐 SCORE THRESHOLDS — Hit & surprise zones</div>
+        <div id="pro-score-thresholds"></div>
+      </div>
+    </div>
+
+    <!-- COLLECT -->
+    <div class="panel" id="panel-collect">
+      <div id="collect-result"></div>
+      <div class="card">
+        <div class="card-title">ENTER REFILL</div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Date</div>
+          <input type="date" class="date-input" id="pro-date">
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Codes (space/comma separated, repeats allowed)</div>
+          <textarea class="codes-input" id="pro-codes" placeholder="07 07 12 45 83..."></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="saveProEntry()" style="width:100%">Save Refill</button>
+      </div>
+      <div id="whats-next-pro" style="display:none"></div>
+    </div>
+
+    <!-- ANALYZE -->
+    <div class="panel" id="panel-analyze">
+      <div class="sec-head">Walk-Forward Validation</div>
+      <div class="card">
+        <div class="card-title">ACCURACY OVER TIME (no future leakage)</div>
+        <div class="card-sub">Train on refills 1→N, test on N+1. Bar = slot coverage per refill.</div>
+        <div id="wf-chart"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">5-FOLD CROSS-VALIDATION</div>
+        <div class="card-sub">5 independent temporal splits averaged. More reliable than single holdout.</div>
+        <div id="kfold-results"></div>
+      </div>
+      <div class="sec-head">Signal Analysis</div>
+      <div class="card">
+        <div class="card-title">PERMUTATION IMPORTANCE</div>
+        <div class="card-sub">Signal zeroed out — accuracy drop = true contribution. KEY / USEFUL / NOISE badges.</div>
+        <div id="perm-importance"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">SIGNAL HIT RATES — HIGH vs LOW signal value</div>
+        <div class="card-sub">Hit rate when signal was high (≥0.6) vs low (≤0.35) at prediction time. Proves which signals actually predict hits.</div>
+        <div id="signal-hit-rates"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">CALIBRATION CURVE</div>
+        <div class="card-sub">Teal bar = actual hit rate. Grey = predicted probability. Perfect = diagonal.</div>
+        <div id="calib-curve"></div>
+      </div>
+      <div class="sec-head">Thresholds</div>
+      <div class="card">
+        <div class="card-title">LEARNED THRESHOLDS — Score-to-hit mapping</div>
+        <div id="pro-thresholds"></div>
+      </div>
+      <div class="sec-head">Code Intelligence</div>
+      <div class="card">
+        <div class="card-title">EMERGENT PATTERNS</div>
+        <div id="pro-patterns"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">MOMENTUM — Emerging vs fading codes</div>
+        <div id="pro-momentum"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">REGIME STATUS</div>
+        <div id="pro-regime"></div>
+      </div>
+    </div>
+
+    <!-- COMPARE -->
+    <div class="panel" id="panel-compare">
+      <!-- Accuracy summary -->
+      <div class="card" style="border-color:var(--teal)">
+        <div class="card-title" style="color:var(--teal)">⚖️ INSIGHTPRO vs INSIGHT — Accuracy</div>
+        <div id="cmp-accuracy"></div>
+      </div>
+      <!-- Top-5 side by side -->
+      <div class="card">
+        <div class="card-title">TOP-5 COMPARISON — Current prediction</div>
+        <div class="card-sub">Agreement shows where both models converge. Disagreement = investigate.</div>
+        <div id="cmp-predictions"></div>
+      </div>
+      <!-- Prediction history comparison -->
+      <div class="card">
+        <div class="card-title">PREDICTION HISTORY — Hit check vs Insight</div>
+        <div id="cmp-history"></div>
+      </div>
+      <!-- Triggered comparison -->
+      <div class="card">
+        <div class="card-title">TRIGGERED CODES — Pro vs Insight</div>
+        <div id="cmp-triggered"></div>
+      </div>
+      <!-- Signal weights -->
+      <div class="card">
+        <div class="card-title">SIGNAL COMPARISON</div>
+        <div class="card-sub">Teal = InsightPro permutation importance. Amber = Insight adapted weights. ↕ = notable disagreement.</div>
+        <div id="cmp-signals"></div>
+      </div>
+    </div>
+
+    <!-- TRACK -->
+    <div class="panel" id="panel-track">
+      <div class="card">
+        <div class="card-title">MODEL PERFORMANCE</div>
+        <div id="track-perf"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">LEARNED THRESHOLDS</div>
+        <div id="track-thresholds"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">PREDICTION HISTORY</div>
+        <div id="track-history"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">TRIGGERED CODES — Outside top-5</div>
+        <div id="track-triggered"></div>
+      </div>
+    </div>
+
+    <!-- DATA -->
+    <div class="panel" id="panel-data">
+      <div class="card">
+        <div class="card-title">IMPORT FROM INSIGHT</div>
+        <p class="card-sub">Import Insight backup JSON. InsightPro uses its own ML engine on the same refill data.</p>
+        <input type="file" id="pro-import-input" accept=".json" style="display:none" onchange="importInsightData(this)">
+        <button class="btn btn-primary" onclick="document.getElementById('pro-import-input').click()">Import Insight Backup</button>
+        <div id="import-result" style="margin-top:10px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">REBUILD ML MODELS</div>
+        <p class="card-sub">Trains all three sub-models, runs walk-forward validation, learns thresholds. Run after importing data.</p>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Rebuild scope:</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="rebuild-shop-pills"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="rebuildProModels()">🔧 Rebuild All Shops</button>
+          <button class="btn btn-primary" id="rebuild-one-btn" onclick="rebuildActiveShopPro()" style="display:none">🔧 Rebuild Active Shop</button>
+        </div>
+        <div id="rebuild-result" style="margin-top:10px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">CLEAR DATA</div>
+        <button class="btn btn-secondary" style="color:var(--rose);border-color:var(--rose)" onclick="clearProData()">Clear InsightPro Data</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════
+// InsightPro — Professional ML Engine
+// Reads same backup format as Insight (inv_intel_v4)
+// Independent DB key: insight_pro_v1
+// Inherits full signal infrastructure from Insight
+// Adds: ensemble models, walk-forward CV, k-fold CV,
+//       Platt calibration, bootstrap CI, permutation importance
+// ═══════════════════════════════════════════════════════════════
+
+var PRO_KEY = 'insight_pro_v1';
+var db = {shops:{}};
+var activeShop = null;
+
+// ── DB ─────────────────────────────────────
+function loadDB(){ try{ var d=JSON.parse(localStorage.getItem(PRO_KEY)); if(d&&d.shops) return d; }catch(e){} return {shops:{}}; }
+function saveDB(d){ localStorage.setItem(PRO_KEY,JSON.stringify(d)); }
+function proShopEntries(c){ return (db.shops[c]&&db.shops[c].entries)||[]; }
+function proShopPreds(c){ return (db.shops[c]&&db.shops[c].predictions)||[]; }
+function proShopModels(c){ return (db.shops[c]&&db.shops[c].models)||null; }
+function proShopThresholds(c){ return (db.shops[c]&&db.shops[c].learnedThresholds)||null; }
+
+// Adapt Insight DB helper signatures for InsightPro (use proShop* wrappers)
+function shopEntries(c){ return proShopEntries(c); }
+function shopPreds(c){ return proShopPreds(c); }
+function shopData(c){ return db.shops[c]; }
+function shopObs(c){ return (db.shops[c]&&db.shops[c].obsWindows)||{}; }
+function shopBaselineHitRate(c){
+  var preds=proShopPreds(c);
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  if(!resolved.length) return 0.3;
+  var t=0,h=0;
+  resolved.forEach(function(p){Object.values(p.outcome).forEach(function(v){t++;if(v==='hit')h++;});});
+  return t>0?h/t:0.3;
+}
+function zScore(rate, base, n){ var sd=Math.sqrt(base*(1-base)/Math.max(1,n)); return sd>0?(rate-base)/sd:0; }
+function getWeights(c){ return (db.shops[c]&&db.shops[c].weights)||Object.assign({},DEFAULT_WEIGHTS); }
+function saveWeights(c,w){ db.shops[c].weights=w; saveDB(db); }
+function normaliseWeights(w){
+  var t=Object.values(w).reduce(function(a,b){return a+b;},0);
+  if(!t) return w;
+  var r={};
+  Object.keys(w).forEach(function(k){r[k]=w[k]/t;});
+  return r;
+}
+function resolveStatus(outcome){
+  var vals=Object.values(outcome);
+  if(vals.every(function(v){return v==='hit';})) return 'hit';
+  if(vals.some(function(v){return v==='hit'||v==='partial';})) return 'partial';
+  return 'miss';
+}
+function processObservationWindow(c, pred){ return {decisions:[]}; } // stub — InsightPro doesn't use obs windows
+function getObsPenalty(c, code){ return 1.0; }
+function buildSignalOutcomeCorrelation(k, c, preds){
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome&&p.predictedCodes.indexOf(c)>-1;});
+  if(resolved.length<2) return null;
+  var highH=0,highT=0,lowH=0,lowT=0;
+  resolved.forEach(function(p){
+    var snap=p.signalSnapshot&&p.signalSnapshot[c];
+    if(!snap) return;
+    var val=snap[k]||0;
+    var hit=p.outcome[c]==='hit'?1:0;
+    if(val>=0.6){highT++;highH+=hit;}
+    else if(val<=0.35){lowT++;lowH+=hit;}
+  });
+  var hi=highT>0?highH/highT:null;
+  var lo=lowT>0?lowH/lowT:null;
+  var lift=hi!==null&&lo!==null?hi-lo:0;
+  return {lift:lift,resolved:resolved.length,misleading:lift<-0.15};
+}
+function buildAvgQty(entries){
+  var t={},n={};
+  entries.forEach(function(e){
+    var cnt={};
+    e.codes.forEach(function(c){cnt[c]=(cnt[c]||0)+1;});
+    Object.keys(cnt).forEach(function(c){t[c]=(t[c]||0)+cnt[c];n[c]=(n[c]||0)+1;});
+  });
+  var r={};
+  Object.keys(t).forEach(function(c){r[c]=t[c]/n[c];});
+  return r;
+}
+
+// ── HELPERS ────────────────────────────────
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function mean(arr){ return arr.length?arr.reduce(function(a,b){return a+b;},0)/arr.length:0; }
+function std(arr){ if(arr.length<2) return 0; var m=mean(arr); return Math.sqrt(arr.reduce(function(a,b){return a+Math.pow(b-m,2);},0)/arr.length); }
+function codesFromText(txt){ return txt.trim().split(/[\s,\-]+/).map(function(c){return c.replace(/\D/g,'').padStart(2,'0');}).filter(function(c){return c.length===2&&!isNaN(c);}); }
+function showToast(msg){ var t=document.createElement('div'); t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:8px 16px;font-size:12px;color:var(--text);z-index:999;white-space:nowrap'; t.textContent=msg; document.body.appendChild(t); setTimeout(function(){t.remove();},2000); }
+function getSignalColor(k){ return 'var(--sig-'+k+')'; }
+function getSignalName(k){ return SIGNAL_NAMES[k]||k; }
+function verdictCls(l){ return l==='high'?'verdict-high':l==='moderate'?'verdict-moderate':l==='low'?'verdict-low':'verdict-none'; }
+function verdictLabel(l){ return l==='high'?'HIGH':l==='moderate'?'MODERATE':l==='low'?'LOW':'—'; }
+
+// ── SHARED SIGNAL INFRASTRUCTURE (from Insight) ──
+var DEFAULT_WEIGHTS = {
+  freq:     0.12,
+  recency:  0.16,
+  streak:   0.09,
+  bias:     0.07,
+  cooccur:  0.07,
+  interval: 0.04,
+  dow:      0.03,
+  cycle:    0.07,
+  overdue:  0.07,
+  qtydom:   0.09,
+  qtystreak:0.06,
+  momentum: 0.13   // 12th signal — recent window vs preceding window appearance delta
+};
+var SIGNAL_KEYS = ['freq','recency','streak','bias','cooccur','interval','dow','cycle','overdue','qtydom','qtystreak','momentum'];
+var SIGNAL_COLORS = {
+  freq:'var(--sig-freq)', recency:'var(--sig-recency)', streak:'var(--sig-streak)',
+  bias:'var(--sig-bias)', cooccur:'var(--sig-cooccur)', interval:'var(--sig-interval)',
+  dow:'var(--sig-dow)', cycle:'var(--sig-cycle)', overdue:'var(--sig-overdue)',
+  qtydom:'var(--sig-qtydom)', qtystreak:'var(--sig-qtystreak)',
+  momentum:'var(--sig-momentum)'
+};
+var SIGNAL_NAMES = {
+  freq:'Frequency', recency:'Recency', streak:'Streak', bias:'Pred. accuracy',
+  cooccur:'Co-occur', interval:'Interval', dow:'Day-of-wk', cycle:'Cycle',
+  overdue:'Overdue', qtydom:'Qty dominance', qtystreak:'Qty streak',
+  momentum:'Momentum'
+};
+var MOMENTUM_WINDOW = 8;
+var LEARNING_RATE = 0.03;
+var WEIGHT_MIN    = 0.02;
+var WEIGHT_MAX    = 0.50;
+var GRAD_MIN_N          = 3;
+var GRAD_Z_THRESHOLD    = 1.2;
+var OBS_MIN_N           = 3;
+var OBS_MAX_N           = 10;
+var OBS_Z_THRESHOLD     = 1.5;
+var OBS_SOFT_PENALTY    = 0.85;
+var OBS_HARD_PENALTY    = 0.60;
+var OBS_RECOVER_HITS    = 2;
+
+function buildFreqMap(entries){
+  var f={};
+  entries.forEach(function(e){e.codes.forEach(function(c){f[c]=(f[c]||0)+1;});});
+  return f;
+}
+
+
+function buildAppearanceRate(entries){
+  var r={},n=entries.length;
+  entries.forEach(function(e){
+    var seen={};
+    e.codes.forEach(function(c){if(!seen[c]){seen[c]=true;r[c]=(r[c]||0)+1;}});
+  });
+  Object.keys(r).forEach(function(k){r[k]=r[k]/n;});
+  return r;
+}
+
+
+function buildAvgQty(entries){
+  var totals={},apps={};
+  entries.forEach(function(e){
+    var cnt={};
+    e.codes.forEach(function(c){cnt[c]=(cnt[c]||0)+1;});
+    Object.keys(cnt).forEach(function(c){totals[c]=(totals[c]||0)+cnt[c];apps[c]=(apps[c]||0)+1;});
+  });
+  var avg={};
+  Object.keys(totals).forEach(function(c){avg[c]=totals[c]/apps[c];});
+  return avg;
+}
+
+
+function buildWeightedScore(entries){
+  var s={},n=entries.length;
+  entries.forEach(function(e,i){
+    var w=(i+1)/n;
+    e.codes.forEach(function(c){s[c]=(s[c]||0)+w;});
+  });
+  return s;
+}
+
+
+function buildStreaks(entries){
+  var st={},rev=entries.slice().reverse();
+  for(var code=0;code<=99;code++){
+    var c=String(code).padStart(2,'0'),streak=0;
+    for(var i=0;i<rev.length;i++){
+      var cnt=rev[i].codes.filter(function(x){return x===c;}).length;
+      if(cnt>0) streak+=1+(cnt-1)*0.5; // bonus for repeats within a refill
+      else break;
+    }
+    if(streak>0)st[c]=streak;
+  }
+  return st;
+}
+
+
+function buildCooccurrence(entries){
+  var pairCount={}, codeCount={};
+  entries.forEach(function(e){
+    var unique=Array.from(new Set(e.codes));
+    unique.forEach(function(c){ codeCount[c]=(codeCount[c]||0)+1; });
+    for(var i=0;i<unique.length;i++){
+      for(var j=i+1;j<unique.length;j++){
+        var a=unique[i],b=unique[j];
+        var key=a<b?a+'|'+b:b+'|'+a;
+        pairCount[key]=(pairCount[key]||0)+1;
+      }
+    }
+  });
+  var coScore={};
+  Object.keys(pairCount).forEach(function(key){
+    var parts=key.split('|'), a=parts[0], b=parts[1], n=pairCount[key];
+    var rateAB=codeCount[a]>0?n/codeCount[a]:0;
+    var rateBA=codeCount[b]>0?n/codeCount[b]:0;
+    coScore[b]=(coScore[b]||0)+rateAB;
+    coScore[a]=(coScore[a]||0)+rateBA;
+  });
+  return coScore;
+}
+
+
+function buildTightCooccurrence(entries){
+  var pairCount={}, codeCount={};
+  entries.forEach(function(e){
+    var unique=Array.from(new Set(e.codes));
+    unique.forEach(function(c){ codeCount[c]=(codeCount[c]||0)+1; });
+    for(var i=0;i<unique.length;i++){
+      for(var j=i+1;j<unique.length;j++){
+        var a=unique[i],b=unique[j];
+        var key=a<b?a+'|'+b:b+'|'+a;
+        pairCount[key]=(pairCount[key]||0)+1;
+      }
+    }
+  });
+  var tightScore={};
+  Object.keys(pairCount).forEach(function(key){
+    var parts=key.split('|'), a=parts[0], b=parts[1], n=pairCount[key];
+    var rateAB=codeCount[a]>0?n/codeCount[a]:0;
+    var rateBA=codeCount[b]>0?n/codeCount[b]:0;
+    // Only count tight pairs (80%+ co-appearance rate both ways)
+    if(rateAB>=0.80 && rateBA>=0.80){
+      tightScore[a]=(tightScore[a]||0)+rateBA;
+      tightScore[b]=(tightScore[b]||0)+rateAB;
+    }
+  });
+  return tightScore;
+}
+
+
+function buildIntervalRegularity(entries){
+  var reg={};
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var allCodes=Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[])));
+  allCodes.forEach(function(c){
+    var appearances=sorted.filter(function(e){return e.codes.includes(c);});
+    if(appearances.length<3){ reg[c]=0; return; }
+    var gaps=[];
+    for(var i=1;i<appearances.length;i++){
+      var d1=new Date(appearances[i-1].date+'T12:00:00');
+      var d2=new Date(appearances[i].date+'T12:00:00');
+      gaps.push(Math.round((d2-d1)/(1000*60*60*24)));
+    }
+    var mean=gaps.reduce(function(a,b){return a+b;},0)/gaps.length;
+    if(mean===0){ reg[c]=0; return; }
+    var variance=gaps.reduce(function(a,b){return a+Math.pow(b-mean,2);},0)/gaps.length;
+    var cv=Math.sqrt(variance)/mean;
+    reg[c]=Math.max(0,1-cv);
+  });
+  return reg;
+}
+
+
+function buildDowPattern(entries){
+  var dow={};
+  var today=new Date().getDay();
+  entries.forEach(function(e){
+    var d=new Date(e.date+'T12:00:00').getDay();
+    var unique=Array.from(new Set(e.codes));
+    unique.forEach(function(c){
+      if(!dow[c]) dow[c]=new Array(7).fill(0);
+      dow[c][d]++;
+    });
+  });
+  var score={};
+  Object.keys(dow).forEach(function(c){
+    var counts=dow[c];
+    var total=counts.reduce(function(a,b){return a+b;},0);
+    if(total===0){ score[c]=0.5; return; }
+    var todayRate=counts[today]/total;
+    var expected=1/7;
+    score[c]=Math.min(1, todayRate/expected/7);
+  });
+  return score;
+}
+
+
+function buildCycleScore(entries){
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var n=sorted.length;
+  var allCodes=Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[])));
+  var cycleScore={};
+
+  allCodes.forEach(function(c){
+    // Build binary presence sequence
+    var seq=sorted.map(function(e){return e.codes.indexOf(c)>-1?1:0;});
+    if(seq.length<6){ cycleScore[c]=0; return; }
+
+    // Test cycles of period 2, 3, 4
+    var bestScore=0;
+    [2,3,4].forEach(function(period){
+      // Score = how well does this period predict the sequence?
+      var correct=0, total=0;
+      for(var i=period;i<seq.length;i++){
+        // Predict: same as i-period
+        var pred=seq[i-period];
+        if(pred===seq[i]) correct++;
+        total++;
+      }
+      var accuracy=total>0?correct/total:0;
+      // Baseline: just always predicting 1 (appears) or 0
+      var baselineAccuracy=Math.max(
+        seq.filter(function(v){return v===1;}).length/seq.length,
+        seq.filter(function(v){return v===0;}).length/seq.length
+      );
+      var lift=accuracy-baselineAccuracy;
+      if(lift>bestScore) bestScore=lift;
+    });
+
+    // Was this code absent in the last entry?
+    var lastAbsent=seq[seq.length-1]===0;
+    // Boost if on a cycle AND currently absent (due/overdue)
+    cycleScore[c]=lastAbsent ? bestScore : bestScore*0.3;
+  });
+  return cycleScore;
+}
+
+
+function buildOverdueScore(entries){
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var n=sorted.length;
+  var allCodes=Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[])));
+  var overdue={};
+
+  allCodes.forEach(function(c){
+    var appearances=sorted.filter(function(e){return e.codes.indexOf(c)>-1;});
+    if(appearances.length<3){ overdue[c]=0; return; }
+
+    // Expected interval in refills (not days)
+    var appRate=appearances.length/n; // fraction of refills where it appears
+    if(appRate<0.3){ overdue[c]=0; return; } // only track frequent codes
+
+    var expectedInterval=1/appRate; // avg refills between appearances
+
+    // Count how many refills since last appearance
+    var refillsSinceLast=0;
+    for(var i=sorted.length-1;i>=0;i--){
+      if(sorted[i].codes.indexOf(c)>-1) break;
+      refillsSinceLast++;
+    }
+
+    // Overdue ratio: how many times the expected interval has elapsed
+    var overdueRatio=refillsSinceLast/expectedInterval;
+    // Score: 0 if not overdue, rising to 1 if 2x overdue
+    overdue[c]=Math.min(1, Math.max(0, overdueRatio-0.5)*2);
+  });
+  return overdue;
+}
+
+
+function buildQtyDominance(entries){
+  if(!entries.length) return {};
+  var avgSlotsPerRefill = entries.reduce(function(a,e){return a+e.codes.length;},0)/entries.length;
+  if(avgSlotsPerRefill===0) return {};
+
+  // avgQty per code across all refills (counting only refills where it appeared)
+  var totals={}, apps={};
+  entries.forEach(function(e){
+    var cnt={};
+    e.codes.forEach(function(c){cnt[c]=(cnt[c]||0)+1;});
+    Object.keys(cnt).forEach(function(c){
+      totals[c]=(totals[c]||0)+cnt[c];
+      apps[c]=(apps[c]||0)+1;
+    });
+  });
+
+  // Pool average: total slots / unique appearing codes — baseline for a uniform draw
+  var allCodes=Object.keys(totals);
+  var poolAvg = allCodes.length>0
+    ? entries.reduce(function(a,e){return a+e.codes.length;},0) / allCodes.length / entries.length
+    : 1;
+
+  var score={};
+  allCodes.forEach(function(c){
+    var avgQty = totals[c]/apps[c];   // avg times it appears when present
+    var appearRate = apps[c]/entries.length; // fraction of refills it appears in
+    var weightedAvg = avgQty * appearRate;   // expected slots per refill
+
+    // Dominance = how much above pool average
+    var lift = poolAvg>0 ? (weightedAvg - poolAvg) / poolAvg : 0;
+    score[c] = Math.max(0, Math.min(1, 0.5 + lift)); // 0.5 = average, >0.5 = dominant
+  });
+  return score;
+}
+
+
+function buildQtyStreak(entries){
+  var rev=entries.slice().reverse();
+  var allCodes=Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[])));
+  var score={};
+  allCodes.forEach(function(c){
+    var streak=0;
+    for(var i=0;i<rev.length;i++){
+      var cnt=rev[i].codes.filter(function(x){return x===c;}).length;
+      if(cnt>=2) streak++;      // only counts if appeared 2+ times
+      else break;
+    }
+    score[c] = Math.min(1, streak/4); // normalise: 4+ refills of 2+ = score 1.0
+  });
+  return score;
+}
+
+
+function buildQtyTrend(entries){
+  var trend={};
+  var allCodes=Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[])));
+  allCodes.forEach(function(c){
+    var appearances=entries.filter(function(e){return e.codes.includes(c);});
+    if(appearances.length<4){ trend[c]=1.0; return; }
+    var half=Math.floor(appearances.length/2);
+    var earlier=appearances.slice(0,half);
+    var later=appearances.slice(half);
+    function avgQty(set){
+      var total=set.reduce(function(a,e){return a+e.codes.filter(function(x){return x===c;}).length;},0);
+      return total/set.length;
+    }
+    var qEarly=avgQty(earlier), qLate=avgQty(later);
+    if(qEarly===0) { trend[c]=1.0; return; }
+    trend[c]=Math.min(1.20, Math.max(0.80, qLate/qEarly));
+  });
+  return trend;
+}
+
+
+function buildBias(predictions){
+  var bias={};
+  var resolved=predictions.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  if(!resolved.length) return bias;
+  var stats={};
+  resolved.forEach(function(p){
+    Object.keys(p.outcome).forEach(function(code){
+      if(!stats[code])stats[code]={hits:0,total:0};
+      stats[code].total++;
+      if(p.outcome[code]==='hit')stats[code].hits++;
+    });
+  });
+  Object.keys(stats).forEach(function(code){bias[code]=stats[code].hits/stats[code].total;});
+  return bias;
+}
+
+
+function buildMissStreakPenalty(predictions, letter){
+  var penalty={};
+
+  // Use observation window if available
+  if(letter){
+    db=loadDB();
+    var obs=shopObs(letter);
+    Object.keys(obs).forEach(function(code){
+      penalty[code]=obs[code].penaltyApplied!==undefined?obs[code].penaltyApplied:1.0;
+    });
+    return penalty;
+  }
+
+  // Fallback: streak counting from predictions
+  var resolved=predictions.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  if(!resolved.length) return {};
+  var recent=resolved.slice().reverse();
+  var codeMissStreak={};
+  recent.forEach(function(p){
+    Object.keys(p.outcome).forEach(function(c){
+      if(codeMissStreak[c]===undefined) codeMissStreak[c]=0;
+      if(p.outcome[c]==='miss') codeMissStreak[c]++;
+      else codeMissStreak[c]=0;
+    });
+  });
+  Object.keys(codeMissStreak).forEach(function(c){
+    var streak=codeMissStreak[c];
+    penalty[c]=streak===0?1.0:streak===1?OBS_SOFT_PENALTY:streak===2?0.70:OBS_HARD_PENALTY;
+  });
+  return penalty;
+}
+
+
+function buildMomentumScore(entries){
+  var n = entries.length;
+  var sorted = entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var w = Math.min(MOMENTUM_WINDOW, Math.floor(n/2));
+  if(w < 2) return {};
+
+  var recent   = sorted.slice(n-w);
+  var preceding= sorted.slice(Math.max(0,n-2*w), n-w);
+  var allCodes = Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[])));
+
+  var raw={};
+  allCodes.forEach(function(c){
+    var rRate = recent.filter(function(e){return e.codes.indexOf(c)>-1;}).length / recent.length;
+    var pRate = preceding.length>0
+      ? preceding.filter(function(e){return e.codes.indexOf(c)>-1;}).length / preceding.length
+      : 0;
+    raw[c] = rRate - pRate; // delta: −1 to +1
+  });
+
+  // Normalise to 0–1 for signal use (0.5 = stable, >0.5 = emerging, <0.5 = fading)
+  var scores={};
+  allCodes.forEach(function(c){ scores[c] = Math.max(0, Math.min(1, 0.5 + raw[c])); });
+  return {scores:scores, raw:raw};
+}
+
+
+function detectRegimeShift(entries){
+  var n = entries.length;
+  if(n < 8) return {shifting:false, overlapScore:1, note:'Insufficient data'};
+  var sorted = entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var w = Math.min(MOMENTUM_WINDOW, Math.floor(n/2));
+  var recent    = sorted.slice(n-w);
+  var historical= sorted; // full history
+
+  function topCodes(set, topN){
+    var freq={};
+    set.forEach(function(e){e.codes.forEach(function(c){freq[c]=(freq[c]||0)+1;});});
+    return Object.entries(freq).sort(function(a,b){return b[1]-a[1];}).slice(0,topN).map(function(x){return x[0];});
+  }
+
+  var topN = Math.min(8, Math.ceil(n/3));
+  var recentTop = topCodes(recent, topN);
+  var histTop   = topCodes(historical, topN);
+
+  var overlap = recentTop.filter(function(c){return histTop.indexOf(c)>-1;}).length;
+  var overlapScore = overlap / topN;
+  var shifting = overlapScore < 0.6; // less than 60% overlap = regime shift
+
+  var emerging = recentTop.filter(function(c){return histTop.indexOf(c)===-1;});
+  var fading   = histTop.filter(function(c){return recentTop.indexOf(c)===-1;});
+
+  var note = shifting
+    ? 'Pattern shift detected — '+(emerging.length?emerging.join(', ')+' emerging':'new codes rising')
+      +(fading.length?' · '+fading.join(', ')+' fading':'')
+      +'. Recency and momentum prioritised.'
+    : 'Stable — recent pattern consistent with history ('+Math.round(overlapScore*100)+'% overlap).';
+
+  return {shifting:shifting, overlapScore:overlapScore,
+    recentDominant:recentTop, historicalDominant:histTop,
+    emerging:emerging, fading:fading, note:note};
+}
+
+
+function classifyCodeStates(entries){
+  if(entries.length < 4) return {};
+  var sorted = entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var n = sorted.length;
+  var momentum = buildMomentumScore(entries);
+  var allCodes = Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[])));
+  var states = {};
+
+  allCodes.forEach(function(c){
+    var totalApps  = sorted.filter(function(e){return e.codes.indexOf(c)>-1;}).length;
+    var recentW    = Math.min(MOMENTUM_WINDOW, Math.floor(n/2));
+    var recentApps = sorted.slice(n-recentW).filter(function(e){return e.codes.indexOf(c)>-1;}).length;
+    var recentRate = recentApps / recentW;
+    var raw = momentum.raw ? (momentum.raw[c]||0) : 0;
+
+    var state;
+    if(recentApps === 0 && totalApps > 0) {
+      state = 'dormant';   // was in pool, not seen recently
+    } else if(raw >= 0.30) {
+      state = 'emerging';  // significantly more frequent recently
+    } else if(raw <= -0.30) {
+      state = 'fading';    // significantly less frequent recently
+    } else {
+      state = 'active';    // stable pattern
+    }
+    states[c] = {state:state, raw:raw, recentRate:recentRate, totalApps:totalApps};
+  });
+  return states;
+}
+
+
+function buildScoreThreshold(code, entries, preds){
+  var resolved = preds.filter(function(p){
+    return p.status!=='pending' && p.outcome && p.predictedCodes.indexOf(code)>-1 && p.scores;
+  });
+  if(resolved.length < 4) return null;
+
+  var maxS = Math.max.apply(null, resolved.map(function(p){
+    return Math.max.apply(null, Object.values(p.scores||{}).concat([0.001]));
+  }));
+
+  // Build normalised score + outcome pairs
+  var pairs = resolved.map(function(p){
+    var normScore = Math.round((p.scores[code]||0)/maxS*100);
+    return {score:normScore, hit:p.outcome[code]==='hit'?1:0};
+  }).sort(function(a,b){return a.score-b.score;});
+
+  // Walk up from the median to find where hit rate ≥70%
+  var threshold = null;
+  var midIdx = Math.floor(pairs.length/2);
+  for(var i=midIdx;i<pairs.length;i++){
+    var above = pairs.slice(i);
+    var aboveHits = above.filter(function(x){return x.hit;}).length;
+    var aboveRate = aboveHits/above.length;
+    if(aboveRate >= 0.70 && above.length >= 2){
+      threshold = pairs[i].score;
+      break;
+    }
+  }
+  if(threshold === null){
+    // No threshold found — try with 60%
+    for(var j=midIdx;j<pairs.length;j++){
+      var ab2 = pairs.slice(j);
+      var ab2Hits = ab2.filter(function(x){return x.hit;}).length;
+      if(ab2Hits/ab2.length >= 0.60 && ab2.length >= 2){
+        threshold = pairs[j].score;
+        break;
+      }
+    }
+  }
+  if(threshold === null) threshold = 50; // fallback
+
+  var above = pairs.filter(function(x){return x.score>=threshold;});
+  var below = pairs.filter(function(x){return x.score<threshold;});
+  var aboveHitRate = above.length ? Math.round(above.filter(function(x){return x.hit;}).length/above.length*100) : null;
+  var belowHitRate = below.length ? Math.round(below.filter(function(x){return x.hit;}).length/below.length*100) : null;
+
+  // Reliability: how much lift does the threshold provide?
+  var lift = aboveHitRate!==null && belowHitRate!==null ? aboveHitRate - belowHitRate : 0;
+  var reliability = resolved.length >= 10 && lift >= 30 ? 'proven'
+    : resolved.length >= 5  && lift >= 15 ? 'emerging'
+    : 'insufficient';
+
+  // Check if low scores also hit (the phenomenon you observed)
+  var lowScorers = pairs.filter(function(x){return x.score<=30;});
+  var lowHitRate = lowScorers.length ? Math.round(lowScorers.filter(function(x){return x.hit;}).length/lowScorers.length*100) : null;
+  var lowScoreHitsNote = lowHitRate!==null && lowHitRate>=40
+    ? 'Note: codes scoring ≤30% still hit '+lowHitRate+'% of the time — presence/absence pattern may be too random for score to fully predict.'
+    : null;
+
+  return {
+    thresholdPct: threshold,
+    hitRateAbove: aboveHitRate,
+    hitRateBelowThreshold: belowHitRate,
+    aboveN: above.length,
+    belowN: below.length,
+    lift: lift,
+    reliability: reliability,
+    totalPreds: resolved.length,
+    lowScoreHitsNote: lowScoreHitsNote,
+    message: reliability==='proven'
+      ? 'Threshold at '+threshold+'%: '+aboveHitRate+'% hit rate above vs '+(belowHitRate||0)+'% below. PROVEN reliable.'
+      : reliability==='emerging'
+      ? 'Threshold at '+threshold+'%: '+aboveHitRate+'% vs '+(belowHitRate||0)+'% — emerging pattern. Need more predictions.'
+      : 'Insufficient data for reliable threshold (need 5+ resolved predictions).'
+  };
+}
+
+
+function buildShopThresholds(entries, preds){
+  var resolved=preds.filter(function(p){
+    return p.status!=='pending'&&p.outcome&&p.scores&&p.predictedCodes;
+  });
+  if(resolved.length<5) return null;
+
+  // Collect all (normScore, hit) pairs across every predicted code in every prediction
+  var maxS=0;
+  resolved.forEach(function(p){
+    var m=Math.max.apply(null,Object.values(p.scores).concat([0.001]));
+    if(m>maxS) maxS=m;
+  });
+
+  var pairs=[];
+  resolved.forEach(function(p){
+    var localMax=Math.max.apply(null,Object.values(p.scores).concat([0.001]));
+    p.predictedCodes.forEach(function(c){
+      var normScore=Math.round((p.scores[c]||0)/localMax*100);
+      var hit=p.outcome[c]==='hit'?1:0;
+      pairs.push({score:normScore,hit:hit,code:c});
+    });
+  });
+
+  pairs.sort(function(a,b){return a.score-b.score;});
+
+  // Bucket into 10% bands and compute hit rate per band
+  var bands=[];
+  for(var b=0;b<10;b++){
+    var lo=b*10,hi=(b+1)*10;
+    var inBand=pairs.filter(function(x){return x.score>=lo&&x.score<hi;});
+    if(inBand.length>0){
+      var hitRate=Math.round(inBand.filter(function(x){return x.hit;}).length/inBand.length*100);
+      bands.push({lo:lo,hi:hi,n:inBand.length,hitRate:hitRate});
+    }
+  }
+
+  // Find the reliable hit threshold — lowest score band where hit rate stays ≥60%
+  // consistently from that band upward
+  var shopThreshold=null;
+  for(var i=bands.length-1;i>=0;i--){
+    var allAbove=bands.slice(i);
+    var aboveN=allAbove.reduce(function(a,b){return a+b.n;},0);
+    var aboveH=allAbove.reduce(function(a,b){return a+Math.round(b.hitRate*b.n/100);},0);
+    var aboveRate=aboveN>0?Math.round(aboveH/aboveN*100):0;
+    if(aboveRate>=60&&aboveN>=3){
+      shopThreshold=bands[i].lo;
+    }
+  }
+
+  // Surprise zone — score bands where surprise hit rate is highest
+  // (these are the bands where we under-predict)
+  var overallHitRate=Math.round(pairs.filter(function(x){return x.hit;}).length/pairs.length*100);
+  var deadZone=bands.filter(function(b){
+    return Math.abs(b.hitRate-overallHitRate)<10&&b.n>=3;
+  }); // bands where score doesn't discriminate
+
+  return {
+    bands:bands,
+    shopThreshold:shopThreshold,
+    overallHitRate:overallHitRate,
+    deadZone:deadZone,
+    totalPairs:pairs.length,
+    resolvedCount:resolved.length
+  };
+}
+
+
+function buildSurpriseThreshold(entries, preds){
+  var resolved=preds.filter(function(p){
+    return p.status!=='pending'&&p.outcome&&p.scores&&p.actualCodes;
+  });
+  if(resolved.length<5) return null;
+
+  // For each prediction, find surprise codes and their scores
+  var surprisePairs=[];
+  resolved.forEach(function(p){
+    var localMax=Math.max.apply(null,Object.values(p.scores).concat([0.001]));
+    var surprises=Array.from(new Set((p.actualCodes||[]).filter(function(c){
+      return p.predictedCodes.indexOf(c)===-1;
+    })));
+    // All non-predicted codes that WERE scored — bucket them as (score, appeared)
+    Object.keys(p.scores).forEach(function(c){
+      if(p.predictedCodes.indexOf(c)>-1) return; // skip predicted codes
+      var normScore=Math.round((p.scores[c]||0)/localMax*100);
+      var appeared=surprises.indexOf(c)>-1?1:0;
+      surprisePairs.push({score:normScore,appeared:appeared,code:c});
+    });
+  });
+
+  if(surprisePairs.length<10) return null;
+
+  surprisePairs.sort(function(a,b){return a.score-b.score;});
+
+  // Bucket into 10% bands
+  var bands=[];
+  for(var b=0;b<10;b++){
+    var lo=b*10,hi=(b+1)*10;
+    var inBand=surprisePairs.filter(function(x){return x.score>=lo&&x.score<hi;});
+    if(inBand.length>0){
+      var appearRate=Math.round(inBand.filter(function(x){return x.appeared;}).length/inBand.length*100);
+      bands.push({lo:lo,hi:hi,n:inBand.length,appearRate:appearRate});
+    }
+  }
+
+  // Surprise threshold — the score band above which non-predicted codes
+  // appear at a meaningfully higher rate than average
+  var overallSurpriseRate=Math.round(surprisePairs.filter(function(x){return x.appeared;}).length/surprisePairs.length*100);
+  var surpriseThreshold=null;
+  for(var i=bands.length-1;i>=0;i--){
+    var band=bands[i];
+    if(band.appearRate>=overallSurpriseRate+15&&band.n>=3){
+      surpriseThreshold=band.lo;
+      break;
+    }
+  }
+
+  return {
+    bands:bands,
+    surpriseThreshold:surpriseThreshold,
+    overallSurpriseRate:overallSurpriseRate,
+    totalPairs:surprisePairs.length,
+    resolvedCount:resolved.length
+  };
+}
+
+
+function buildCooccurImplications(entries, top5Codes){
+  if(!entries.length||!top5Codes.length) return [];
+
+  // Build pairwise co-occurrence matrix
+  var pairCount={}, codeCount={};
+  entries.forEach(function(e){
+    var unique=Array.from(new Set(e.codes));
+    unique.forEach(function(c){codeCount[c]=(codeCount[c]||0)+1;});
+    for(var i=0;i<unique.length;i++){
+      for(var j=i+1;j<unique.length;j++){
+        var a=unique[i],b=unique[j];
+        var key=a<b?a+'|'+b:b+'|'+a;
+        pairCount[key]=(pairCount[key]||0)+1;
+      }
+    }
+  });
+
+  // For each top-5 code, find codes it implies (not already in top-5)
+  var implications=[];
+  var seen=new Set(top5Codes);
+
+  top5Codes.forEach(function(predictedCode){
+    // Find all partners of this code
+    Object.keys(pairCount).forEach(function(key){
+      var parts=key.split('|');
+      var a=parts[0],b=parts[1];
+      var isA=(a===predictedCode),isB=(b===predictedCode);
+      if(!isA&&!isB) return;
+      var partner=isA?b:a;
+      if(seen.has(partner)) return; // already in top-5 or already found
+
+      var n=pairCount[key];
+      var baseCode=predictedCode;
+      var rateGivenPredicted=codeCount[baseCode]>0?n/codeCount[baseCode]:0;
+      var rateGivenPartner  =codeCount[partner]>0?n/codeCount[partner]:0;
+      var isTight=rateGivenPredicted>=0.75&&rateGivenPartner>=0.75;
+
+      // Only surface if meaningful co-occurrence rate (≥55% given predicted code)
+      if(rateGivenPredicted>=0.55){
+        seen.add(partner);
+        implications.push({
+          impliedCode:partner,
+          via:predictedCode,
+          rate:Math.round(rateGivenPredicted*100),
+          reverseRate:Math.round(rateGivenPartner*100),
+          tight:isTight,
+          pairCount:n,
+          totalPredicted:codeCount[predictedCode]||0
+        });
+      }
+    });
+  });
+
+  // Sort: tight pairs first, then by rate desc
+  implications.sort(function(a,b){
+    if(a.tight!==b.tight) return a.tight?-1:1;
+    return b.rate-a.rate;
+  });
+
+  return implications.slice(0,8);
+}
+
+
+function buildSignalConsensus(code, snap, weights, effectiveW){
+  var yes=0,no=0,neutral=0;
+  var yesSignals=[],noSignals=[];
+  var w=effectiveW||weights||DEFAULT_WEIGHTS;
+
+  SIGNAL_KEYS.forEach(function(k){
+    var val=snap[k]||0;
+    var wt=w[k]||DEFAULT_WEIGHTS[k]||0;
+    // A signal "votes yes" if its value is above 0.5 (normalised scale)
+    // weighted by its importance
+    var weighted=val*wt;
+    if(val>=0.6)      { yes++;   yesSignals.push(k);  }
+    else if(val<=0.35){ no++;    noSignals.push(k);   }
+    else              { neutral++;                      }
+  });
+
+  var total=yes+no+neutral;
+  var score=total>0?Math.round((yes-no*0.5)/total*100):50;
+  score=Math.max(0,Math.min(100,score+50)); // normalise to 0-100
+
+  var label=score>=75?'STRONG':score>=55?'MODERATE':score>=40?'MIXED':'WEAK';
+  var col=score>=75?'var(--green)':score>=55?'var(--accent)':score>=40?'var(--gold)':'var(--red)';
+
+  return {yes:yes,no:no,neutral:neutral,score:score,label:label,col:col,
+    yesSignals:yesSignals,noSignals:noSignals};
+}
+
+
+function buildHistoricalSimilarity(entries, topN){
+  topN=topN||3;
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var n=sorted.length;
+  var windowSize=Math.min(3,Math.floor(n/3)); // compare last 3 refills
+  if(n<windowSize*2+1) return [];
+
+  // Current sequence: last windowSize refills
+  var currentSeq=sorted.slice(n-windowSize);
+  var currentCodes=new Set(currentSeq.reduce(function(a,e){return a.concat(e.codes);},[]) );
+
+  var matches=[];
+  // Slide window through history (excluding the most recent window)
+  for(var i=0;i<=n-windowSize-1;i++){
+    var candidateSeq=sorted.slice(i,i+windowSize);
+    var candidateCodes=new Set(candidateSeq.reduce(function(a,e){return a.concat(e.codes);},[]) );
+
+    // Jaccard similarity
+    var intersection=0;
+    currentCodes.forEach(function(c){if(candidateCodes.has(c))intersection++;});
+    var union=currentCodes.size+candidateCodes.size-intersection;
+    var similarity=union>0?intersection/union:0;
+
+    if(similarity>=0.5&&i+windowSize<n){
+      var followingEntry=sorted[i+windowSize];
+      var followingCodes=Array.from(new Set(followingEntry.codes));
+      matches.push({
+        startIdx:i+1,
+        endIdx:i+windowSize,
+        similarity:Math.round(similarity*100),
+        candidateDates:candidateSeq.map(function(e){return e.date.slice(5);}).join('→'),
+        followingDate:followingEntry.date.slice(5),
+        followingCodes:followingCodes,
+        commonCodes:followingCodes.filter(function(c){return currentCodes.has(c);}),
+        newCodes:followingCodes.filter(function(c){return !currentCodes.has(c);})
+      });
+    }
+  }
+
+  // Sort by similarity desc, dedupe by following codes
+  matches.sort(function(a,b){return b.similarity-a.similarity;});
+  return matches.slice(0,topN);
+}
+
+
+function detectRetiredCodes(entries, predictions){
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var n=sorted.length;
+  if(n<10) return {retired:[],suspects:[]};
+
+  var appRate=buildAppearanceRate(entries);
+  var cycleMap=buildCycleScore(entries);
+  var retired=[],suspects=[];
+
+  Object.keys(appRate).forEach(function(c){
+    var rate=appRate[c];
+    if(rate<0.15) return; // never frequent enough to matter
+    var expectedInterval=Math.round(1/rate);
+    if(expectedInterval<2) return; // appears too frequently to retire
+
+    // Count refills since last appearance
+    var absentCount=0;
+    for(var i=sorted.length-1;i>=0;i--){
+      if(sorted[i].codes.indexOf(c)>-1) break;
+      absentCount++;
+    }
+
+    var cycleStrength=cycleMap[c]||0;
+    var retirementThreshold=expectedInterval*3;
+
+    if(absentCount>=retirementThreshold&&cycleStrength<0.25){
+      // Check: has it truly never appeared in the last 30% of entries?
+      var recentWindow=sorted.slice(Math.floor(n*0.7));
+      var appearedRecently=recentWindow.some(function(e){return e.codes.indexOf(c)>-1;});
+      if(!appearedRecently){
+        retired.push({
+          code:c,
+          absentCount:absentCount,
+          expectedInterval:expectedInterval,
+          lastSeenEntry:n-absentCount,
+          historicalRate:Math.round(rate*100)
+        });
+      }
+    } else if(absentCount>=expectedInterval*2&&cycleStrength<0.25){
+      suspects.push({code:c,absentCount:absentCount,expectedInterval:expectedInterval});
+    }
+  });
+
+  return {retired:retired,suspects:suspects};
+}
+
+
+function buildCodeHitProfile(code, entries, predictions, letter){
+  var resolved = predictions.filter(function(p){
+    return p.status!=='pending' && p.outcome && p.predictedCodes.indexOf(code)>-1;
+  });
+  if(resolved.length < 2) return null;
+
+  var hits   = resolved.filter(function(p){return p.outcome[code]==='hit';});
+  var misses = resolved.filter(function(p){return p.outcome[code]==='miss';});
+  var partials=resolved.filter(function(p){return p.outcome[code]==='partial';});
+
+  var hitRate = Math.round(hits.length / resolved.length * 100);
+
+  // Per-signal mean value at prediction time for hits vs misses
+  var sigMeans = {};
+  SIGNAL_KEYS.forEach(function(k){
+    var hitVals  = hits.map(function(p){return p.signalSnapshot&&p.signalSnapshot[code]?p.signalSnapshot[code][k]||0:0;});
+    var missVals = misses.map(function(p){return p.signalSnapshot&&p.signalSnapshot[code]?p.signalSnapshot[code][k]||0:0;});
+    var hitMean  = hitVals.length  ? hitVals.reduce(function(a,b){return a+b;},0)/hitVals.length   : null;
+    var missMean = missVals.length ? missVals.reduce(function(a,b){return a+b;},0)/missVals.length : null;
+    var lift = (hitMean!==null && missMean!==null) ? hitMean - missMean : null;
+    sigMeans[k] = {hitMean:hitMean, missMean:missMean, lift:lift};
+  });
+
+  // Compute a lift-weighted hit confidence score for each resolved prediction
+  var liftWeights = {};
+  var totalLift = 0;
+  SIGNAL_KEYS.forEach(function(k){
+    var lift = sigMeans[k].lift;
+    if(lift !== null && lift > 0){ liftWeights[k] = lift; totalLift += lift; }
+    else liftWeights[k] = 0;
+  });
+
+  function computeHitScore(pred){
+    if(!pred.signalSnapshot||!pred.signalSnapshot[code]) return 0;
+    var snap = pred.signalSnapshot[code];
+    var score = 0;
+    SIGNAL_KEYS.forEach(function(k){
+      if(totalLift > 0) score += (snap[k]||0) * (liftWeights[k]/totalLift);
+    });
+    return score;
+  }
+
+  var hitScores  = hits.map(computeHitScore);
+  var missScores = misses.map(computeHitScore);
+
+  // Threshold: minimum hit score at which hits occur ≥70%
+  // Find the score percentile that maximises precision
+  var allScores = resolved.map(function(p){
+    return {score:computeHitScore(p), isHit:p.outcome[code]==='hit'};
+  }).sort(function(a,b){return a.score-b.score;});
+
+  var threshold = 0;
+  if(allScores.length >= 3){
+    // Walk up from the median score and find where hit rate crosses 70%
+    for(var i=Math.floor(allScores.length/2); i<allScores.length; i++){
+      var above = allScores.slice(i);
+      var aboveHits = above.filter(function(x){return x.isHit;}).length;
+      if(aboveHits/above.length >= 0.70){ threshold = allScores[i].score; break; }
+    }
+  }
+
+  // Current score (from latest buildCombinedScore)
+  var currentResult = buildCombinedScore(entries, predictions, letter);
+  var currentRaw = currentResult.scores[code]||0;
+  var maxScore   = Math.max.apply(null, Object.values(currentResult.scores).concat([0.001]));
+  var currentPct = Math.round(currentRaw/maxScore*100);
+
+  // Hit confidence level vs threshold
+  var thresholdPct = maxScore>0 ? Math.round(threshold/maxScore*100) : 50;
+  var confGap = currentPct - thresholdPct;
+  var confLevel = confGap >= 20 ? 'high'
+    : confGap >= 0  ? 'moderate'
+    : confGap >= -20? 'watch'
+    : 'low';
+
+  // Quantity profile
+  var avgQty = 0, maxQty = 0, qtyDist = {};
+  var qtyEntries = entries.filter(function(e){return e.codes.indexOf(code)>-1;});
+  qtyEntries.forEach(function(e){
+    var cnt = e.codes.filter(function(c){return c===code;}).length;
+    avgQty += cnt;
+    if(cnt > maxQty) maxQty = cnt;
+    qtyDist[cnt] = (qtyDist[cnt]||0)+1;
+  });
+  avgQty = qtyEntries.length > 0 ? (avgQty/qtyEntries.length) : 0;
+  var poolAvgQty = entries.reduce(function(a,e){return a+e.codes.length;},0) /
+                   Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[] ))).length /
+                   entries.length;
+
+  // Temporal pattern
+  var gaps = [];
+  var lastIdx = -1;
+  entries.forEach(function(e,i){
+    if(e.codes.indexOf(code)>-1){
+      if(lastIdx>=0) gaps.push(i-lastIdx);
+      lastIdx = i;
+    }
+  });
+  var avgGap = gaps.length ? gaps.reduce(function(a,b){return a+b;},0)/gaps.length : null;
+  var recentW = Math.min(MOMENTUM_WINDOW, entries.length);
+  var recentApps = entries.slice(-recentW).filter(function(e){return e.codes.indexOf(code)>-1;}).length;
+
+  // Co-occurrence on hit
+  var coHits = {};
+  entries.filter(function(e){return e.codes.indexOf(code)>-1;}).forEach(function(e){
+    Array.from(new Set(e.codes)).forEach(function(c2){
+      if(c2!==code) coHits[c2] = (coHits[c2]||0)+1;
+    });
+  });
+  var topCoHits = Object.entries(coHits)
+    .sort(function(a,b){return b[1]-a[1];})
+    .slice(0,4)
+    .map(function(x){return {c:x[0], pct:Math.round(x[1]/qtyEntries.length*100)};});
+
+  return {
+    code:code, resolved:resolved.length, hitRate:hitRate,
+    hits:hits.length, misses:misses.length, partials:partials.length,
+    sigMeans:sigMeans,
+    confLevel:confLevel, confGap:confGap,
+    currentPct:currentPct, thresholdPct:thresholdPct,
+    avgQty:avgQty.toFixed(2), maxQty:maxQty, qtyDist:qtyDist, poolAvgQty:poolAvgQty.toFixed(2),
+    avgGap:avgGap?avgGap.toFixed(1):null, recentApps:recentApps, recentWindow:recentW,
+    topCoHits:topCoHits,
+    appRate: Math.round(qtyEntries.length/entries.length*100)
+  };
+}
+
+
+function buildMissAttribution(code, entries, preds, resolvedPred){
+  if(!resolvedPred||!resolvedPred.outcome||resolvedPred.outcome[code]!=='miss') return null;
+
+  var sorted   = entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var snap     = resolvedPred.signalSnapshot&&resolvedPred.signalSnapshot[code]||{};
+  var weights  = resolvedPred.weightsAtTime||{};
+  var scores   = resolvedPred.scores||{};
+  var maxS     = Math.max.apply(null,Object.values(scores).concat([0.001]));
+  var scorePct = Math.round((scores[code]||0)/maxS*100);
+
+  // Top driver at prediction time
+  var topSig = SIGNAL_KEYS.map(function(k){
+    return {k:k,contrib:(snap[k]||0)*(weights[k]||DEFAULT_WEIGHTS[k])};
+  }).sort(function(a,b){return b.contrib-a.contrib;})[0];
+
+  // Observation window state
+  var obs = shopObs(activeShop||'')[code]||{state:'idle'};
+
+  // Cycle signal strength at prediction time
+  var cycleVal = snap.cycle||0;
+  var momentumVal = snap.momentum||0.5;
+
+  // How many consecutive misses before this one
+  var resolved = preds.filter(function(p){return p.status!=='pending'&&p.outcome&&p.predictedCodes.indexOf(code)>-1;});
+  var consecMisses = 0;
+  for(var i=resolved.length-2;i>=0;i--){ // -2 = before current
+    if(resolved[i].outcome[code]==='miss') consecMisses++;
+    else break;
+  }
+
+  // Score threshold check
+  var threshold = buildScoreThreshold(code, entries, preds);
+  var belowThreshold = threshold && scorePct < threshold.thresholdPct;
+
+  // Regime at prediction time
+  var regime = sorted.length>=8 ? detectRegimeShift(sorted) : {shifting:false};
+  var fadingInRegime = regime.shifting && (regime.fading||[]).indexOf(code)>-1;
+
+  // Determine primary cause
+  var cause, explanation, action;
+
+  if(cycleVal >= 0.35 && consecMisses % 2 === 0){
+    // Cycle pattern — code is on alternating cycle, this was the off-refill
+    cause = 'cycle';
+    explanation = 'Cycle signal was '+Math.round(cycleVal*100)+'% at prediction time. Code appears on a ~2-refill cycle and this was likely the off-refill. Misses on known cycles are expected — not a model error.';
+    action = 'No penalty applied. Model will boost this code next refill (cycle trigger).';
+  } else if(fadingInRegime){
+    cause = 'regime_shift';
+    explanation = 'Regime shift detected — this code is in the declining set. Historical signals (especially '+( topSig?getSignalName(topSig.k):'frequency')+') reflect older patterns that no longer apply.';
+    action = 'Momentum signal will progressively reduce this code\'s score. Frequency weight dynamically reduced during regime.';
+  } else if(belowThreshold && threshold){
+    cause = 'below_threshold';
+    explanation = 'Score was '+scorePct+'% — below this code\'s empirical hit threshold of '+threshold.thresholdPct+'%. At this score level, the model has historically hit only '+threshold.hitRateBelowThreshold+'% of the time. This miss was statistically expected.';
+    action = 'No weight change. Score below threshold means the model already had low confidence for this code.';
+  } else if(consecMisses >= 1 && topSig && topSig.contrib > 0.1){
+    cause = 'counter_predictive_signal';
+    explanation = 'Consecutive miss #'+(consecMisses+1)+'. Dominant signal '+getSignalName(topSig.k)+' ('+Math.round(topSig.contrib*100)+'% contribution) has been high but code keeps missing. Signal may be counter-predictive for this code.';
+    action = obs.state==='confirmed'
+      ? 'Observation window CONFIRMED — hard penalty (40%) already applied.'
+      : obs.state==='watching'
+      ? 'Observation window WATCHING — z=accumulating. '+( OBS_MIN_N-consecMisses-1)+' more consistent misses needed to confirm.'
+      : 'Observation window opened — monitoring.';
+  } else if(momentumVal < 0.35){
+    cause = 'momentum_fade';
+    explanation = 'Momentum signal was '+Math.round(momentumVal*100)+'% (below 0.5 = fading). Code has been appearing less frequently in recent refills — historical signals overstated its likelihood.';
+    action = 'Momentum weight adjustment will reduce this code\'s score in subsequent predictions.';
+  } else {
+    cause = 'unexplained';
+    explanation = 'No clear structural cause. Score was '+scorePct+'%, dominant signal '+( topSig?getSignalName(topSig.k):'—')+'. This may be genuine random variation — the code pool allows for unexpected absences.';
+    action = 'Single miss logged. Observation window monitoring. No weight change yet.';
+  }
+
+  return {
+    code:code, cause:cause, explanation:explanation, action:action,
+    scorePct:scorePct, topSig:topSig, consecMisses:consecMisses+1,
+    obsState:obs.state, cycleVal:cycleVal, belowThreshold:belowThreshold,
+    threshold:threshold
+  };
+}
+
+
+function buildEmergentPatterns(entries, predictions){
+  var sorted   = entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var n        = sorted.length;
+  var resolved = predictions.filter(function(p){return p.status!=='pending'&&p.outcome&&p.actualCodes;});
+  var patterns = [];
+  var MIN_CASES = 3;     // minimum supporting cases to surface a pattern
+  var MIN_CONF  = 0.60;  // minimum confidence to show
+  var PROMOTE_CONF = 0.70; // confidence to promote into top-3
+  var PROMOTE_CASES= 5;    // minimum cases to promote
+
+  if(n < 6) return patterns;
+
+  var allCodes = Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[])));
+  var avgQtyMap = buildAvgQty(entries);
+
+  // ── TYPE 1: Sequential Trigger ─────────────
+  // "Code A appeared in refill N → Code B appeared in refill N+1"
+  // Also includes quantity variant: "Code A appeared 2+ times → Code B followed"
+  allCodes.forEach(function(trigCode){
+    allCodes.forEach(function(targetCode){
+      if(trigCode===targetCode) return;
+      var matchCases=0, hitCases=0;
+      var qtyMatchCases=0, qtyHitCases=0;
+      for(var i=0;i<sorted.length-1;i++){
+        var cur  = sorted[i];
+        var next = sorted[i+1];
+        var trigCount = cur.codes.filter(function(c){return c===trigCode;}).length;
+        var targetCount = next.codes.filter(function(c){return c===targetCode;}).length;
+        // Simple presence trigger
+        if(trigCount>0){
+          matchCases++;
+          if(targetCount>0) hitCases++;
+        }
+        // Quantity trigger (2+ times)
+        if(trigCount>=2){
+          qtyMatchCases++;
+          if(targetCount>0) qtyHitCases++;
+        }
+      }
+      // Simple sequential
+      if(matchCases>=MIN_CASES){
+        var conf=hitCases/matchCases;
+        if(conf>=MIN_CONF){
+          var lastEntry=sorted[sorted.length-1];
+          var triggered=lastEntry.codes.indexOf(trigCode)>-1;
+          patterns.push({
+            type:'sequential',
+            rule:'Code '+trigCode+' appeared → Code '+targetCode+' followed next refill',
+            evidence:hitCases+'/'+matchCases+' cases',
+            cases:matchCases, hits:hitCases, confidence:conf,
+            triggered:triggered,
+            impliedCodes:[targetCode],
+            triggerCode:trigCode,
+            detail:triggered
+              ?'✅ Trigger met — '+trigCode+' appeared in last refill'
+              :'⚪ Not triggered — '+trigCode+' absent last refill'
+          });
+        }
+      }
+      // Quantity sequential
+      if(qtyMatchCases>=MIN_CASES){
+        var qconf=qtyHitCases/qtyMatchCases;
+        if(qconf>=MIN_CONF){
+          var lastEntry2=sorted[sorted.length-1];
+          var qtrigCount=lastEntry2.codes.filter(function(c){return c===trigCode;}).length;
+          var qtriggered=qtrigCount>=2;
+          patterns.push({
+            type:'qty_sequential',
+            rule:'Code '+trigCode+' appeared 2+ times → Code '+targetCode+' followed',
+            evidence:qtyHitCases+'/'+qtyMatchCases+' cases',
+            cases:qtyMatchCases, hits:qtyHitCases, confidence:qconf,
+            triggered:qtriggered,
+            impliedCodes:[targetCode],
+            triggerCode:trigCode,
+            detail:qtriggered
+              ?'✅ Trigger met — '+trigCode+' appeared '+qtrigCount+'× last refill'
+              :'⚪ Not triggered (need '+trigCode+' 2+ times last refill)'
+          });
+        }
+      }
+    });
+  });
+
+  // ── TYPE 2: Quantity Momentum ──────────────
+  // "Code A appeared X+ times in last N refills → it appeared X+ times next refill"
+  allCodes.forEach(function(c){
+    var avg = avgQtyMap[c]||1;
+    var threshold = Math.max(2, Math.round(avg));
+    var matchCases=0, hitCases=0;
+    for(var i=0;i<sorted.length-1;i++){
+      var cnt=sorted[i].codes.filter(function(x){return x===c;}).length;
+      if(cnt>=threshold){
+        matchCases++;
+        var nextCnt=sorted[i+1].codes.filter(function(x){return x===c;}).length;
+        if(nextCnt>=threshold) hitCases++;
+      }
+    }
+    if(matchCases>=MIN_CASES){
+      var conf=hitCases/matchCases;
+      if(conf>=MIN_CONF){
+        var lastCnt=sorted[sorted.length-1].codes.filter(function(x){return x===c;}).length;
+        var triggered=lastCnt>=threshold;
+        patterns.push({
+          type:'qty_momentum',
+          rule:'Code '+c+' at '+threshold+'+ slots → stayed at '+threshold+'+ next refill',
+          evidence:hitCases+'/'+matchCases+' cases',
+          cases:matchCases, hits:hitCases, confidence:conf,
+          triggered:triggered,
+          impliedCodes:[c],
+          detail:triggered
+            ?'✅ Trigger met — '+c+' appeared '+lastCnt+'× last refill (threshold '+threshold+')'
+            :'⚪ Not triggered ('+c+' appeared '+lastCnt+'× last refill, need '+threshold+')'
+        });
+      }
+    }
+  });
+
+  // ── TYPE 3: Cluster Trigger ────────────────
+  // "When codes A AND B both appeared → Code C followed next refill"
+  // Only check top-10 frequent codes for performance
+  var topCodes = Object.entries(buildFreqMap(entries))
+    .sort(function(a,b){return b[1]-a[1];}).slice(0,10).map(function(x){return x[0];});
+  for(var ai=0;ai<topCodes.length;ai++){
+    for(var bi=ai+1;bi<topCodes.length;bi++){
+      var ca=topCodes[ai], cb=topCodes[bi];
+      allCodes.forEach(function(ct){
+        if(ct===ca||ct===cb) return;
+        var matchCases=0, hitCases=0;
+        for(var i=0;i<sorted.length-1;i++){
+          var unique=Array.from(new Set(sorted[i].codes));
+          if(unique.indexOf(ca)>-1&&unique.indexOf(cb)>-1){
+            matchCases++;
+            if(sorted[i+1].codes.indexOf(ct)>-1) hitCases++;
+          }
+        }
+        if(matchCases>=MIN_CASES){
+          var conf=hitCases/matchCases;
+          if(conf>=MIN_CONF){
+            var lastUnique=Array.from(new Set(sorted[sorted.length-1].codes));
+            var triggered=lastUnique.indexOf(ca)>-1&&lastUnique.indexOf(cb)>-1;
+            patterns.push({
+              type:'cluster',
+              rule:'Codes '+ca+' & '+cb+' both appeared → Code '+ct+' followed',
+              evidence:hitCases+'/'+matchCases+' cases',
+              cases:matchCases, hits:hitCases, confidence:conf,
+              triggered:triggered,
+              impliedCodes:[ct],
+              detail:triggered
+                ?'✅ Trigger met — both '+ca+' and '+cb+' in last refill'
+                :'⚪ Not triggered (need both '+ca+' and '+cb+')'
+            });
+          }
+        }
+      });
+    }
+  }
+
+  // ── TYPE 4: Absence Trigger ────────────────
+  // "Code A was absent for N+ refills → it returned"
+  allCodes.forEach(function(c){
+    var appRate = buildAppearanceRate(entries)[c]||0;
+    if(appRate<0.30) return; // only track codes that appear reasonably often
+    var expectedInterval = Math.round(1/appRate);
+    if(expectedInterval<2) return;
+    var matchCases=0, hitCases=0;
+    for(var i=expectedInterval;i<sorted.length-1;i++){
+      // Count consecutive absences ending at i
+      var absenceRun=0;
+      for(var j=i;j>=0;j--){
+        if(sorted[j].codes.indexOf(c)===-1) absenceRun++;
+        else break;
+      }
+      if(absenceRun>=expectedInterval){
+        matchCases++;
+        if(sorted[i+1].codes.indexOf(c)>-1) hitCases++;
+      }
+    }
+    if(matchCases>=MIN_CASES){
+      var conf=hitCases/matchCases;
+      if(conf>=MIN_CONF){
+        // Current absence run
+        var curAbsence=0;
+        for(var i2=sorted.length-1;i2>=0;i2--){
+          if(sorted[i2].codes.indexOf(c)===-1) curAbsence++;
+          else break;
+        }
+        var triggered=curAbsence>=expectedInterval;
+        patterns.push({
+          type:'absence',
+          rule:'Code '+c+' absent '+expectedInterval+'+ refills → returned next refill',
+          evidence:hitCases+'/'+matchCases+' cases',
+          cases:matchCases, hits:hitCases, confidence:conf,
+          triggered:triggered,
+          impliedCodes:[c],
+          detail:triggered
+            ?'✅ Trigger met — '+c+' absent '+curAbsence+' refills (expected every '+expectedInterval+')'
+            :'⚪ Not triggered ('+c+' absent '+curAbsence+' of '+expectedInterval+' needed)'
+        });
+      }
+    }
+  });
+
+  // ── TYPE 5: Quantity Threshold ─────────────
+  // "When refill total > X slots → Code C is always/usually present"
+  var refillSizes = sorted.map(function(e){return e.codes.length;});
+  var avgSize = refillSizes.reduce(function(a,b){return a+b;},0)/refillSizes.length;
+  var highThreshold = Math.round(avgSize*1.15); // 15% above average = "large" refill
+  allCodes.forEach(function(c){
+    var highCases=0, highHits=0;
+    sorted.forEach(function(e){
+      if(e.codes.length>=highThreshold){
+        highCases++;
+        if(e.codes.indexOf(c)>-1) highHits++;
+      }
+    });
+    if(highCases>=MIN_CASES){
+      var conf=highHits/highCases;
+      if(conf>=0.85){ // higher bar for this type
+        var lastSize=sorted[sorted.length-1].codes.length;
+        patterns.push({
+          type:'qty_threshold',
+          rule:'Refill with '+highThreshold+'+ total slots → Code '+c+' appears',
+          evidence:highHits+'/'+highCases+' high-volume refills',
+          cases:highCases, hits:highHits, confidence:conf,
+          triggered:false, // future refill — can't know size yet
+          impliedCodes:[c],
+          detail:'ℹ️ Applies when next refill has '+highThreshold+'+ total slots (avg: '+Math.round(avgSize)+')'
+        });
+      }
+    }
+  });
+
+  // Sort: triggered first, then by confidence desc
+  patterns.sort(function(a,b){
+    if(a.triggered&&!b.triggered) return -1;
+    if(!a.triggered&&b.triggered) return 1;
+    return b.confidence-a.confidence;
+  });
+
+  return patterns;
+}
+
+
+function buildPlainEnglishSummary(entries, preds, top5Codes, bcsResult, letter){
+  if(!top5Codes.length) return '';
+  var snaps    = bcsResult.snapshots||{};
+  var weights  = bcsResult.weights||{};
+  var regime   = bcsResult.regime||{shifting:false};
+  var obs      = shopObs(letter)||{};
+  var streaks  = buildStreaks(entries);
+  var appRate  = buildAppearanceRate(entries);
+  var qtydom   = buildQtyDominance(entries);
+  var codeStates=classifyCodeStates(entries);
+  var resolved = preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  var last5    = resolved.slice(-5);
+
+  var parts=[];
+
+  // Sentence 1: top pick rationale
+  var top=top5Codes[0];
+  var topSnap=snaps[top]||{};
+  var topSig=SIGNAL_KEYS.map(function(k){
+    return {k:k,contrib:(topSnap[k]||0)*(weights[k]||DEFAULT_WEIGHTS[k])};
+  }).sort(function(a,b){return b.contrib-a.contrib;})[0];
+  var topRate=Math.round((appRate[top]||0)*100);
+  var topStreak=streaks[top]||0;
+  var topState=codeStates[top]?codeStates[top].state:'active';
+  var s1='Top pick is <strong>'+top+'</strong>';
+  if(topStreak>=3) s1+=' ('+topStreak+'-refill streak)';
+  if(topRate>=80) s1+=', appearing in '+topRate+'% of all refills';
+  if(topSig) s1+='. Leading signal: '+getSignalName(topSig.k);
+  if(topState==='emerging') s1+='. ↑ Momentum rising.';
+  parts.push(s1+'.');
+
+  // Sentence 2: tight pairs / co-occurrence
+  var implications=buildCooccurImplications(entries,top5Codes);
+  var tightImps=implications.filter(function(x){return x.tight;});
+  if(tightImps.length){
+    var s2='Tight pair'+(tightImps.length>1?'s':'')+': ';
+    s2+=tightImps.slice(0,2).map(function(imp){
+      return '<strong>'+imp.impliedCode+'</strong> almost always arrives with <strong>'+imp.via+'</strong> ('+imp.rate+'%)';
+    }).join('; ')+'.';
+    parts.push(s2);
+  }
+
+  // Sentence 3: regime / watchout / recent performance
+  if(regime.shifting){
+    parts.push('⚡ Pattern shift detected — '+( regime.emerging&&regime.emerging.length?regime.emerging.join(', ')+' emerging':'new codes rising')+'. Recent signals weighted more heavily.');
+  } else if(last5.length>=3){
+    var l5H=0,l5T=0;
+    last5.forEach(function(p){Object.values(p.outcome).forEach(function(v){l5T++;if(v==='hit')l5H++;});});
+    var l5Rate=l5T>0?Math.round(l5H/l5T*100):0;
+    var trend=l5Rate>=60?'performing well ('+l5Rate+'% code hit rate last 5)':l5Rate>=35?'moderate accuracy ('+l5Rate+'% last 5)':'below average ('+l5Rate+'% last 5) — model still calibrating';
+    parts.push('Recent model accuracy: '+trend+'.');
+  }
+
+  // Sentence 4: obs window warnings if any
+  var confirmed=top5Codes.filter(function(c){return obs[c]&&obs[c].state==='confirmed';});
+  if(confirmed.length){
+    parts.push('⚠️ Note: <strong>'+confirmed.join(', ')+'</strong> '+( confirmed.length>1?'are':'is')+' under observation window penalty — '+( confirmed.length>1?'their':'its')+' scores are already reduced.');
+  }
+
+  return parts.join(' ');
+}
+
+
+function buildCodeConfidenceGrade(code, snap, weights, entries, preds, letter, scorePct){
+  var pts=0, maxPts=0;
+  var breakdown=[];
+
+  // 1. Signal consensus (25pts)
+  var consensus=buildSignalConsensus(code, snap, weights, weights);
+  var consPts=Math.round(consensus.score*0.25);
+  pts+=consPts; maxPts+=25;
+  breakdown.push({label:'Signals',pts:consPts,max:25,detail:consensus.yes+'↑ '+consensus.no+'↓'});
+
+  // 2. Hit rate at this score level — threshold (30pts)
+  var thresh=buildScoreThreshold(code,entries,preds);
+  var threshPts=0;
+  if(thresh&&thresh.reliability!=='insufficient'){
+    if(scorePct>=thresh.thresholdPct){
+      // Above threshold — use the proven above-threshold hit rate
+      threshPts=Math.round((thresh.hitRateAbove||50)/100*30);
+    } else {
+      // Below threshold — use below-threshold hit rate (lower)
+      threshPts=Math.round((thresh.hitRateBelowThreshold||20)/100*30);
+    }
+  } else {
+    // No threshold data — use appearance rate as proxy
+    var appRate=buildAppearanceRate(entries);
+    threshPts=Math.round((appRate[code]||0)*20); // conservative
+  }
+  pts+=threshPts; maxPts+=30;
+  breakdown.push({label:'Score threshold',pts:threshPts,max:30,
+    detail:thresh&&thresh.reliability!=='insufficient'
+      ?(scorePct>=thresh.thresholdPct?'▲ above ('+thresh.hitRateAbove+'% hit)':'▼ below ('+( thresh.hitRateBelowThreshold||0)+'% hit)')
+      :'Threshold pending'});
+
+  // 3. Bias score — historical hit rate when predicted (25pts)
+  var bias=buildBias(preds);
+  var biasVal=bias[code]!==undefined?bias[code]:0.5;
+  var biasPts=Math.round(biasVal*25);
+  pts+=biasPts; maxPts+=25;
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome&&p.predictedCodes.indexOf(code)>-1;});
+  breakdown.push({label:'Prediction bias',pts:biasPts,max:25,
+    detail:resolved.length?Math.round(biasVal*100)+'% hit rate ('+resolved.length+' preds)':'No prediction history'});
+
+  // 4. Observation window health (15pts)
+  var obs=letter?(shopObs(letter)[code]||{state:'idle'}):{state:'idle'};
+  var obsPenalty={idle:0,watching:30,recovering:20,confirmed:60,ambiguous:0}[obs.state]||0;
+  var obsHealth=Math.max(0,100-obsPenalty);
+  var obsPts=Math.round(obsHealth*0.15);
+  pts+=obsPts; maxPts+=15;
+  breakdown.push({label:'Obs window',pts:obsPts,max:15,
+    detail:obs.state==='idle'?'Clear':obs.state.toUpperCase()+(obs.state==='confirmed'?' (−40%)':obs.state==='watching'?' (−15%)':'')});
+
+  // 5. Momentum factor (5pts)
+  var momVal=snap.momentum||0.5;
+  var momPts=Math.round(Math.min(1,Math.max(0,momVal))*5);
+  pts+=momPts; maxPts+=5;
+  breakdown.push({label:'Momentum',pts:momPts,max:5,
+    detail:momVal>=0.65?'↑ Emerging':momVal<=0.35?'↓ Fading':'Stable'});
+
+  var score=maxPts>0?Math.round(pts/maxPts*100):0;
+  var grade=score>=80?'A':score>=65?'B':score>=50?'C':score>=35?'D':'N';
+  var col  =score>=80?'var(--green)':score>=65?'var(--accent)':score>=50?'var(--gold)':'var(--red)';
+
+  return {score:score,grade:grade,col:col,pts:pts,maxPts:maxPts,breakdown:breakdown,
+    consensus:consensus,obsState:obs.state};
+}
+
+
+function buildRefillConfidenceScore(entries, preds, top5Codes, bcsResult, letter){
+  if(!top5Codes.length) return {score:0,grade:'—',col:'var(--muted)',breakdown:[]};
+
+  var scores   = bcsResult.scores||{};
+  var snaps    = bcsResult.snapshots||{};
+  var weights  = bcsResult.weights||{};
+  var regime   = bcsResult.regime||{shifting:false};
+  var obs      = shopObs(letter)||{};
+  var breakdown=[];
+  var total=0,maxPossible=0;
+
+  // Component 1: Average signal consensus across top-5 (15 pts — prior, not outcome)
+  var consensusSum=0;
+  top5Codes.forEach(function(c){
+    var snap=snaps[c]||{};
+    var cs=buildSignalConsensus(c,snap,weights,weights);
+    consensusSum+=cs.score;
+  });
+  var avgConsensus=top5Codes.length?consensusSum/top5Codes.length:50;
+  var consensusPts=Math.round(avgConsensus*0.15);
+  breakdown.push({label:'Signal consensus',pts:consensusPts,max:15,
+    detail:Math.round(avgConsensus)+'% avg across top-5'});
+  total+=consensusPts; maxPossible+=15;
+
+  // Component 2: Observation window health (20 pts)
+  var obsPenaltySum=0;
+  top5Codes.forEach(function(c){
+    var cobs=obs[c]||{state:'idle'};
+    var pen=cobs.state==='confirmed'?40:cobs.state==='watching'?15:cobs.state==='recovering'?20:0;
+    obsPenaltySum+=pen;
+  });
+  var obsHealth=Math.max(0,100-obsPenaltySum/top5Codes.length);
+  var obsPts=Math.round(obsHealth*0.20);
+  breakdown.push({label:'Obs window health',pts:obsPts,max:20,
+    detail:Math.round(obsHealth)+'% — '+top5Codes.filter(function(c){return obs[c]&&obs[c].state!=='idle';}).length+' code(s) penalised'});
+  total+=obsPts; maxPossible+=20;
+
+  // Component 3: Recent accuracy (45 pts — dominant: actual outcomes)
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  var last5=resolved.slice(-5);
+  var trendPts=0;
+  if(last5.length>=3){
+    var last5H=0,last5T=0;
+    last5.forEach(function(p){
+      Object.values(p.outcome).forEach(function(v){last5T++;if(v==='hit')last5H++;});
+    });
+    var last5Rate=last5T>0?last5H/last5T:0;
+    trendPts=Math.round(last5Rate*45);
+    breakdown.push({label:'Recent accuracy',pts:trendPts,max:45,
+      detail:Math.round(last5Rate*100)+'% code hit rate (last '+last5.length+')'});
+  } else {
+    trendPts=15; // partial credit if no history yet
+    breakdown.push({label:'Recent accuracy',pts:trendPts,max:45,detail:'Insufficient history ('+last5.length+' preds)'});
+  }
+  total+=trendPts; maxPossible+=45;
+
+  // Component 4: Pattern stability (20 pts)
+  var regimePts=regime.shifting?Math.round((regime.overlapScore||0.5)*20):20;
+  breakdown.push({label:'Pattern stability',pts:regimePts,max:20,
+    detail:regime.shifting?'Shift detected ('+Math.round((regime.overlapScore||0)*100)+'% overlap)':'Stable'});
+  total+=regimePts; maxPossible+=20;
+
+  var score=Math.round(total/maxPossible*100);
+  var grade=score>=75?'A':score>=60?'B':score>=45?'C':score>=30?'D':'N';
+  var col=score>=75?'var(--green)':score>=60?'var(--accent)':score>=45?'var(--gold)':'var(--red)';
+
+  return {score:score,grade:grade,col:col,breakdown:breakdown,
+    regimeShifting:regime.shifting};
+}
+
+
+function learnAndStoreThresholds(letter){
+  db=loadDB();
+  var entries=shopEntries(letter);
+  var preds=shopPreds(letter);
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome&&p.scores;});
+  if(resolved.length<4) return;
+
+  var thresholds={};
+  var allCodes=Array.from(new Set(resolved.reduce(function(a,p){return a.concat(p.predictedCodes);},[]) ));
+
+  allCodes.forEach(function(code){
+    var thresh=buildScoreThreshold(code,entries,preds);
+    if(thresh&&thresh.reliability!=='insufficient'){
+      thresholds[code]={
+        thresholdPct:thresh.thresholdPct,
+        hitRateAbove:thresh.hitRateAbove,
+        hitRateBelow:thresh.hitRateBelowThreshold,
+        aboveN:thresh.aboveN,
+        belowN:thresh.belowN,
+        lift:thresh.lift,
+        reliability:thresh.reliability,
+        lowScoreHitsNote:thresh.lowScoreHitsNote||null,
+        learnedAt:new Date().toISOString()
+      };
+    }
+  });
+
+  // Also compute shop-level threshold (the score band where overall hit rate ≥60%)
+  var shopT=buildShopThresholds(entries,preds);
+  var surpriseT=buildSurpriseThreshold(entries,preds);
+
+  db.shops[letter].learnedThresholds={
+    perCode:thresholds,
+    shopLevel:shopT?{
+      threshold:shopT.shopThreshold,
+      overallHitRate:shopT.overallHitRate,
+      bands:shopT.bands
+    }:null,
+    surpriseLevel:surpriseT?{
+      threshold:surpriseT.surpriseThreshold,
+      overallSurpriseRate:surpriseT.overallSurpriseRate,
+      bands:surpriseT.bands
+    }:null,
+    codesLearned:Object.keys(thresholds).length,
+    resolvedCount:resolved.length,
+    learnedAt:new Date().toISOString()
+  };
+
+  saveDB(db);
+  return db.shops[letter].learnedThresholds;
+}
+
+
+function getStoredThreshold(letter, code){
+  db=loadDB();
+  var lt=db.shops[letter]&&db.shops[letter].learnedThresholds;
+  if(lt&&lt.perCode&&lt.perCode[code]) return lt.perCode[code];
+  return null; // not yet learned
+}
+
+
+function classifyScoreVsThreshold(letter, code, scorePct){
+  var thresh=getStoredThreshold(letter,code);
+  if(!thresh) return {zone:'unknown',label:'—',col:'var(--muted)',above:null,thresholdPct:null,confidence:'none'};
+
+  var above=scorePct>=thresh.thresholdPct;
+  var zone=above?'above':'below';
+  var col=above?'var(--green)':'var(--gold)';
+  var label=above
+    ?'▲ '+thresh.thresholdPct+'% (hits '+thresh.hitRateAbove+'%)'
+    :'▼ '+thresh.thresholdPct+'% (hits '+(thresh.hitRateBelow||0)+'%)';
+
+  return {
+    zone:zone, label:label, col:col, above:above,
+    thresholdPct:thresh.thresholdPct,
+    hitRateAbove:thresh.hitRateAbove,
+    hitRateBelow:thresh.hitRateBelow,
+    lift:thresh.lift,
+    reliability:thresh.reliability,
+    confidence:thresh.reliability
+  };
+}
+
+
+function applySurpriseGradient(letter, surpriseCodes, entries){
+  if(!surpriseCodes.length||entries.length<5) return [];
+  db=loadDB();
+  var w=getWeights(letter);
+  var wBefore=Object.assign({},w);
+  var changes=[];
+
+  surpriseCodes.forEach(function(code){
+    var fv=buildFeatureVector_simple(code,entries);
+    // Find the signal with the highest value for this surprise code
+    var topSignal=SIGNAL_KEYS.map(function(k){
+      return {k:k,val:fv[k]||0};
+    }).sort(function(a,b){return b.val-a.val;})[0];
+
+    if(topSignal&&topSignal.val>0.3){
+      // Targeted boost: increase the weight of the signal that was high
+      // for this surprise code but wasn't weighted enough to surface it
+      var boost=LEARNING_RATE*0.5*topSignal.val;
+      w[topSignal.k]=Math.min(WEIGHT_MAX,(w[topSignal.k]||DEFAULT_WEIGHTS[topSignal.k])+boost);
+      changes.push({code:code,signal:topSignal.k,val:topSignal.val,
+        from:Math.round(wBefore[topSignal.k]*100),
+        to:Math.round(w[topSignal.k]*100)});
+    }
+  });
+
+  if(changes.length){
+    w=normaliseWeights(w);
+    saveWeights(letter,w);
+    db=loadDB();
+    shopData(letter).gradAccum=shopData(letter).gradAccum||{};
+    saveDB(db);
+  }
+  return changes;
+}
+
+
+function buildFeatureVector_simple(code, entries){
+  var freq=buildFreqMap(entries);
+  var rec=buildWeightedScore(entries);
+  var str=buildStreaks(entries);
+  var mom=buildMomentumScore(entries);
+  var qd=buildQtyDominance(entries);
+  var qs=buildQtyStreak(entries);
+  var od=buildOverdueScore(entries);
+  var cy=buildCycleScore(entries);
+  var mF=Math.max.apply(null,Object.values(freq).concat([1]));
+  var mR=Math.max.apply(null,Object.values(rec).concat([1]));
+  var mS=Math.max.apply(null,Object.values(str).concat([1]));
+  return {
+    freq:(freq[code]||0)/mF, recency:(rec[code]||0)/mR,
+    streak:(str[code]||0)/mS, bias:0.5, cooccur:0.5,
+    interval:0.5, dow:0.5, cycle:(cy[code]||0),
+    overdue:(od[code]||0), qtydom:(qd[code]||0),
+    qtystreak:(qs[code]||0), momentum:(mom.scores[code]||0.5)
+  };
+}
+
+
+function buildWatchouts(entries, predictions, bcsResult, top5Codes, letter){
+  var sorted   = entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var scores   = bcsResult.scores||{};
+  var ranked   = Object.entries(scores).sort(function(a,b){return b[1]-a[1];});
+  var maxS     = ranked.length?ranked[0][1]:0.001;
+  var allCodes = ranked.map(function(x){return x[0];});
+  var candidates= allCodes.filter(function(c){return top5Codes.indexOf(c)===-1;}).slice(0,20);
+
+  var patterns  = buildEmergentPatterns(sorted, predictions);
+  var overdue   = buildOverdueScore(sorted);
+  var cycleMap  = buildCycleScore(sorted);
+  var qtyStr    = buildQtyStreak(sorted);
+  var momResult = buildMomentumScore(sorted);
+  var codeStates= classifyCodeStates(sorted);
+  var resolved  = predictions.filter(function(p){return p.status!=='pending'&&p.outcome;});
+
+  // ── Signal hit-rate validators ────────────
+  // For each signal type, measure actual hit rate when that condition was true
+  // in past predictions. Only trust the signal if it has a proven lift.
+
+  // 1. Overdue validator — when a code was overdue at prediction time, did it hit?
+  function overdueHitRate(code){
+    var total=0,hits=0;
+    resolved.forEach(function(p){
+      if(p.predictedCodes.indexOf(code)===-1) return;
+      var snap=p.signalSnapshot&&p.signalSnapshot[code];
+      if(!snap) return;
+      // Code was overdue at prediction time if overdue signal > 0.4
+      if((snap.overdue||0)>=0.4){
+        total++;
+        if(p.outcome[code]==='hit') hits++;
+      }
+    });
+    return total>=2 ? {rate:Math.round(hits/total*100), n:total} : null;
+  }
+
+  // 2. Cycle validator — when cycle signal was high, did the code hit?
+  function cycleHitRate(code){
+    var total=0,hits=0;
+    resolved.forEach(function(p){
+      if(p.predictedCodes.indexOf(code)===-1) return;
+      var snap=p.signalSnapshot&&p.signalSnapshot[code];
+      if(!snap) return;
+      if((snap.cycle||0)>=0.3){
+        total++;
+        if(p.outcome[code]==='hit') hits++;
+      }
+    });
+    return total>=2 ? {rate:Math.round(hits/total*100), n:total} : null;
+  }
+
+  // 3. Qty streak validator — when qty streak was high, did the code hit?
+  function qtyStreakHitRate(code){
+    var total=0,hits=0;
+    resolved.forEach(function(p){
+      if(p.predictedCodes.indexOf(code)===-1) return;
+      var snap=p.signalSnapshot&&p.signalSnapshot[code];
+      if(!snap) return;
+      if((snap.qtystreak||0)>=0.4){
+        total++;
+        if(p.outcome[code]==='hit') hits++;
+      }
+    });
+    return total>=2 ? {rate:Math.round(hits/total*100), n:total} : null;
+  }
+
+  // Baseline hit rate for the shop
+  var baseline=shopBaselineHitRate(letter);
+  var baselinePct=Math.round(baseline*100);
+
+  // Minimum lift required for a signal to earn advisory status
+  var MIN_LIFT = 15; // signal hit rate must be at least 15% above baseline
+
+  var watchouts = [];
+
+  candidates.forEach(function(c){
+    var scorePct = Math.round((scores[c]||0)/maxS*100);
+    var rank     = ranked.findIndex(function(x){return x[0]===c;})+1;
+    var triggers = [];
+    var maxConf  = 0;
+
+    // 1. Score above empirical hit threshold (always valid — based on outcome history)
+    var thresh = buildScoreThreshold(c, sorted, predictions);
+    if(thresh && thresh.reliability!=='insufficient' && scorePct>=thresh.thresholdPct){
+      var conf=thresh.hitRateAbove||70;
+      triggers.push({
+        type:'threshold', icon:'📊',
+        label:'Above hit threshold',
+        detail:'Score '+scorePct+'% ≥ threshold '+thresh.thresholdPct+'% — hits '+conf+'% at this level (n='+thresh.aboveN+')',
+        confidence:conf, col:'var(--accent)',
+        proven:true
+      });
+      maxConf=Math.max(maxConf,conf);
+    }
+
+    // 2. Emergent pattern triggered (confidence already outcome-verified)
+    patterns.filter(function(p){
+      return p.triggered&&p.confidence>=0.70&&p.cases>=3&&p.impliedCodes.indexOf(c)>-1;
+    }).forEach(function(p){
+      var conf=Math.round(p.confidence*100);
+      triggers.push({
+        type:'pattern', icon:'🔬',
+        label:'Pattern triggered',
+        detail:p.rule+' ('+p.evidence+', '+conf+'%)',
+        confidence:conf, col:'var(--green)',
+        proven:true
+      });
+      maxConf=Math.max(maxConf,conf);
+    });
+
+    // 3. Overdue — ONLY if overdue signal has proven hit lift
+    if((overdue[c]||0)>=0.5){
+      var odRate=overdueHitRate(c);
+      if(odRate&&odRate.rate>=baselinePct+MIN_LIFT){
+        // Proven: overdue condition has historically led to hits for this code
+        var conf=Math.min(90,odRate.rate);
+        triggers.push({
+          type:'overdue', icon:'⏰',
+          label:'Overdue — proven',
+          detail:'When overdue, this code hits '+odRate.rate+'% (baseline '+baselinePct+'%, lift +'+(odRate.rate-baselinePct)+'%, n='+odRate.n+')',
+          confidence:conf, col:'var(--gold)',
+          proven:true
+        });
+        maxConf=Math.max(maxConf,conf);
+      } else if(!odRate){
+        // No prediction history yet — skip entirely (can't prove it)
+      }
+      // If odRate exists but lift < MIN_LIFT — silently dropped
+    }
+
+    // 4. Cycle due — ONLY if cycle signal has proven hit lift
+    var lastEntry=sorted[sorted.length-1];
+    var absentLast=lastEntry&&lastEntry.codes.indexOf(c)===-1;
+    if((cycleMap[c]||0)>=0.35&&absentLast){
+      var cyRate=cycleHitRate(c);
+      if(cyRate&&cyRate.rate>=baselinePct+MIN_LIFT){
+        var conf=Math.min(90,Math.round(cyRate.rate));
+        triggers.push({
+          type:'cycle', icon:'🔄',
+          label:'Cycle due — proven',
+          detail:'Cycle signal '+Math.round((cycleMap[c]||0)*100)+'% · When cycle high, hits '+cyRate.rate+'% (lift +'+(cyRate.rate-baselinePct)+'%, n='+cyRate.n+')',
+          confidence:conf, col:'var(--sig-cycle)',
+          proven:true
+        });
+        maxConf=Math.max(maxConf,conf);
+      }
+      // If not proven — silently dropped
+    }
+
+    // 5. Quantity streak — ONLY if qty streak has proven hit lift
+    if((qtyStr[c]||0)>=0.5){
+      var qsRate=qtyStreakHitRate(c);
+      if(qsRate&&qsRate.rate>=baselinePct+MIN_LIFT){
+        var conf=Math.min(90,qsRate.rate);
+        triggers.push({
+          type:'qty_streak', icon:'📈',
+          label:'Qty streak — proven',
+          detail:Math.round((qtyStr[c]||0)*4)+' consecutive 2+ slot refills · Hits '+qsRate.rate+'% when streak active (lift +'+(qsRate.rate-baselinePct)+'%, n='+qsRate.n+')',
+          confidence:conf, col:'var(--sig-qtystreak)',
+          proven:true
+        });
+        maxConf=Math.max(maxConf,conf);
+      }
+    }
+
+    // 6. Emerging near top-5 (rank 6-8) — only if momentum signal proven
+    var st=codeStates[c]||{state:'active'};
+    if(st.state==='emerging'&&rank<=8){
+      // Validate momentum lift from prediction history
+      var momTotal=0,momHits=0;
+      resolved.forEach(function(p){
+        if(p.predictedCodes.indexOf(c)===-1) return;
+        var snap=p.signalSnapshot&&p.signalSnapshot[c];
+        if(!snap) return;
+        if((snap.momentum||0.5)>=0.6){
+          momTotal++;
+          if(p.outcome[c]==='hit') momHits++;
+        }
+      });
+      var momLift=momTotal>=2?Math.round(momHits/momTotal*100):null;
+      if(momLift!==null&&momLift>=baselinePct+MIN_LIFT){
+        var conf=Math.min(80,momLift);
+        triggers.push({
+          type:'emerging', icon:'↑',
+          label:'Emerging (rank #'+rank+') — proven',
+          detail:'When momentum high, hits '+momLift+'% (lift +'+(momLift-baselinePct)+'%, n='+momTotal+')',
+          confidence:conf, col:'var(--sig-momentum)',
+          proven:true
+        });
+        maxConf=Math.max(maxConf,conf);
+      } else if(momLift===null&&rank<=6){
+        // Near top-5 but not enough history — mark as advisory (unproven)
+        var momRaw=momResult.raw[c]||0;
+        triggers.push({
+          type:'emerging_advisory', icon:'↑',
+          label:'Emerging near top-5',
+          detail:'Rank #'+rank+', momentum +'+Math.round(momRaw*100)+'% — not yet proven by outcome history',
+          confidence:40, col:'var(--sig-momentum)',
+          proven:false
+        });
+        maxConf=Math.max(maxConf,40);
+      }
+    }
+
+    // Only include if at least one trigger (proven OR advisory)
+    if(triggers.length){
+      triggers.sort(function(a,b){return b.confidence-a.confidence;});
+      var hasProven=triggers.some(function(t){return t.proven;});
+      watchouts.push({
+        code:c, rank:rank, scorePct:scorePct,
+        triggers:triggers, maxConf:maxConf,
+        topTrigger:triggers[0],
+        hasProven:hasProven
+      });
+    }
+  });
+
+  // Sort: proven triggers first, then by confidence
+  watchouts.sort(function(a,b){
+    if(a.hasProven!==b.hasProven) return a.hasProven?-1:1;
+    if(b.maxConf!==a.maxConf) return b.maxConf-a.maxConf;
+    return a.rank-b.rank;
+  });
+
+  return watchouts.slice(0,6);
+}
+
+
+function renderWatchoutsHtml(watchouts){
+  if(!watchouts.length) return '';
+
+  var html='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;'
+    +'letter-spacing:.5px;margin-bottom:8px">⚠️ WATCHOUTS — Outside top-5 but triggered</div>';
+
+  watchouts.forEach(function(w){
+    var top=w.topTrigger;
+    var confCol=w.maxConf>=80?'var(--green)':w.maxConf>=65?'var(--gold)':'var(--muted)';
+
+    html+='<div style="padding:7px 0;border-bottom:1px solid var(--border)">'
+      // Code + rank + confidence
+      +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">'
+        +'<span style="font-family:var(--mono);font-weight:900;font-size:16px;color:'+top.col+'">'+w.code+'</span>'
+        +'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:rgba(0,0,0,.2);color:'+confCol+';font-weight:700">'
+          +top.icon+' '+top.label
+        +'</span>'
+        +'<span style="font-size:10px;color:var(--muted);margin-left:auto">rank #'+w.rank+' · score '+w.scorePct+'%</span>'
+      +'</div>'
+      // Primary trigger detail
+      +'<div style="font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:2px">'+top.detail+'</div>'
+      // Additional triggers (compact)
+      +(w.triggers.length>1
+        ?'<div style="font-size:10px;color:var(--muted);opacity:.7">+ '
+          +w.triggers.slice(1).map(function(t){return t.icon+' '+t.label;}).join(' · ')
+          +'</div>'
+        :'')
+      // Confidence bar
+      +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'
+        +'<div style="flex:1;height:3px;background:var(--surface2);border-radius:2px;overflow:hidden">'
+          +'<div style="width:'+w.maxConf+'%;height:100%;background:'+confCol+'"></div>'
+        +'</div>'
+        +'<span style="font-size:10px;font-family:var(--mono);font-weight:700;color:'+confCol+'">'+w.maxConf+'%</span>'
+      +'</div>'
+      +'</div>';
+  });
+
+  html+='</div>';
+  return html;
+}
+
+
+function buildTriggeredPerformance(letter){
+  var preds=shopPreds(letter);
+  var resolved=preds.filter(function(p){
+    return p.status!=='pending'&&p.triggeredOutcome&&Object.keys(p.triggeredOutcome).length;
+  });
+
+  var perCode={};   // {code: {promoted:{hit,total}, watchout:{hit,total}, scorePcts:[]}}
+  var perType={promoted:{hit:0,total:0},watchout:{hit:0,total:0}};
+  var byScoreBand={}; // {band: {hit,total}} for calibration
+
+  resolved.forEach(function(p){
+    Object.keys(p.triggeredOutcome).forEach(function(c){
+      var t=p.triggeredOutcome[c];
+      if(!perCode[c]) perCode[c]={code:c,promoted:{hit:0,total:0},watchout:{hit:0,total:0},scorePcts:[],dates:[]};
+      perCode[c][t.type].total++;
+      if(t.appeared) perCode[c][t.type].hit++;
+      if(t.scorePct!==null) perCode[c].scorePcts.push({pct:t.scorePct,appeared:t.appeared});
+      perCode[c].dates.push({date:p.actualDate||p.createdDate,appeared:t.appeared,type:t.type,scorePct:t.scorePct});
+      perType[t.type].total++;
+      if(t.appeared) perType[t.type].hit++;
+      // Score band
+      if(t.scorePct!==null){
+        var band=Math.floor(t.scorePct/20)*20; // 0,20,40,60,80
+        if(!byScoreBand[band]) byScoreBand[band]={hit:0,total:0};
+        byScoreBand[band].total++;
+        if(t.appeared) byScoreBand[band].hit++;
+      }
+    });
+  });
+
+  // Compute derived stats per code
+  Object.keys(perCode).forEach(function(c){
+    var pc=perCode[c];
+    var totalAll=pc.promoted.total+pc.watchout.total;
+    var hitAll=pc.promoted.hit+pc.watchout.hit;
+    pc.hitRate=totalAll>0?Math.round(hitAll/totalAll*100):null;
+    pc.total=totalAll;
+    pc.hit=hitAll;
+    pc.promotedRate=pc.promoted.total>0?Math.round(pc.promoted.hit/pc.promoted.total*100):null;
+    pc.watchoutRate=pc.watchout.total>0?Math.round(pc.watchout.hit/pc.watchout.total*100):null;
+    // Average score when it appeared vs didn't
+    var appPcts=pc.scorePcts.filter(function(x){return x.appeared;}).map(function(x){return x.pct;});
+    var missPcts=pc.scorePcts.filter(function(x){return !x.appeared;}).map(function(x){return x.pct;});
+    pc.avgScoreOnHit=appPcts.length?Math.round(appPcts.reduce(function(a,b){return a+b;},0)/appPcts.length):null;
+    pc.avgScoreOnMiss=missPcts.length?Math.round(missPcts.reduce(function(a,b){return a+b;},0)/missPcts.length):null;
+  });
+
+  // Sort by hit rate desc then total desc
+  var sorted=Object.values(perCode).sort(function(a,b){
+    if(b.hitRate!==a.hitRate) return (b.hitRate||0)-(a.hitRate||0);
+    return b.total-a.total;
+  });
+
+  return {
+    perCode:sorted,
+    perType:perType,
+    byScoreBand:byScoreBand,
+    resolvedCount:resolved.length
+  };
+}
+
+
+// ── THREE ENSEMBLE SUB-MODELS ───────────────
+var MODEL_DEFS_ORIG = {
+  recency: {name:'Recency',color:'var(--m-recency)',window:0.6,
+    weights:{freq:0.05,recency:0.28,streak:0.15,bias:0.08,cooccur:0.05,interval:0.03,dow:0.02,cycle:0.05,overdue:0.05,qtydom:0.08,qtystreak:0.10,momentum:0.16}},
+  pattern: {name:'Pattern',color:'var(--m-pattern)',window:1.0,
+    weights:{freq:0.18,recency:0.10,streak:0.08,bias:0.12,cooccur:0.15,interval:0.10,dow:0.05,cycle:0.12,overdue:0.05,qtydom:0.03,qtystreak:0.02,momentum:0.00}},
+  quantity:{name:'Quantity',color:'var(--m-quantity)',window:1.0,
+    weights:{freq:0.08,recency:0.12,streak:0.06,bias:0.06,cooccur:0.04,interval:0.04,dow:0.02,cycle:0.04,overdue:0.04,qtydom:0.28,qtystreak:0.18,momentum:0.14}}
+};
+function getModelDefs(){ return JSON.parse(JSON.stringify(MODEL_DEFS_ORIG)); }
+
+function buildFeatureVector(code, entries){
+  var freq=buildFreqMap(entries),rec=buildWeightedScore(entries),str=buildStreaks(entries);
+  var mom=buildMomentumScore(entries),qd=buildQtyDominance(entries),qs=buildQtyStreak(entries);
+  var od=buildOverdueScore(entries),cy=buildCycleScore(entries),qt=buildQtyTrend(entries);
+  var cooc=buildCooccurrence(entries);
+  var mF=Math.max.apply(null,Object.values(freq).concat([1]));
+  var mR=Math.max.apply(null,Object.values(rec).concat([1]));
+  var mS=Math.max.apply(null,Object.values(str).concat([1]));
+  var mC=Math.max.apply(null,Object.values(cooc).concat([1]));
+  var bias=buildBias([]);
+  return {
+    freq:(freq[code]||0)/mF,recency:(rec[code]||0)/mR,streak:(str[code]||0)/mS,
+    bias:0.5,cooccur:(cooc[code]||0)/mC,interval:(buildIntervalRegularity(entries)[code]||0),
+    dow:(buildDowPattern(entries)[code]||0),cycle:(cy[code]||0),overdue:(od[code]||0),
+    qtydom:(qd[code]||0),qtystreak:(qs[code]||0),momentum:(mom.scores[code]||0.5),
+    qtyTrend:(qt[code]||1.0)
+  };
+}
+
+function scoreCode(fv, weights){
+  var s=0;
+  SIGNAL_KEYS.forEach(function(k){s+=(fv[k]||0)*(weights[k]||0);});
+  return s*(fv.qtyTrend||1.0);
+}
+
+function trainSubModel(modelKey, entries){
+  var defs=getModelDefs();
+  var def=defs[modelKey];
+  var n=entries.length;
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var trainN=Math.max(3,Math.round(n*def.window));
+  var trainEntries=sorted.slice(sorted.length-trainN);
+  var all=Array.from(new Set(trainEntries.reduce(function(a,e){return a.concat(e.codes);},[]) ));
+  var scores={};
+  all.forEach(function(c){scores[c]=scoreCode(buildFeatureVector(c,trainEntries),def.weights);});
+  return scores;
+}
+
+function buildEnsembleScores(entries, modelAccuracies){
+  var modelScores={};
+  Object.keys(MODEL_DEFS_ORIG).forEach(function(mk){modelScores[mk]=trainSubModel(mk,entries);});
+  var allCodes=new Set();
+  Object.keys(modelScores).forEach(function(mk){Object.keys(modelScores[mk]).forEach(function(c){allCodes.add(c);});});
+  var ensemble={};
+  allCodes.forEach(function(c){
+    var total=0,wTotal=0;
+    Object.keys(MODEL_DEFS_ORIG).forEach(function(mk){
+      var sc=modelScores[mk];
+      var maxS=Math.max.apply(null,Object.values(sc).concat([0.001]));
+      var normScore=(sc[c]||0)/maxS;
+      var acc=modelAccuracies?modelAccuracies[mk]||0.33:0.33;
+      total+=normScore*acc; wTotal+=acc;
+    });
+    ensemble[c]=wTotal>0?total/wTotal:0;
+  });
+  return {ensemble:ensemble,modelScores:modelScores};
+}
+
+// ── WALK-FORWARD VALIDATION ─────────────────
+function runWalkForward(entries){
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var n=sorted.length;
+  var minTrain=5;
+  if(n<minTrain+2) return {steps:[],avgSlotCov:0,modelAvg:{}};
+  var steps=[];
+  var modelHits={recency:0,pattern:0,quantity:0};
+  var modelTests={recency:0,pattern:0,quantity:0};
+  for(var i=minTrain;i<n-1;i++){
+    var train=sorted.slice(0,i+1);
+    var test=sorted[i+1];
+    var testSlots=test.codes.length;
+    var covered={};
+    Object.keys(MODEL_DEFS_ORIG).forEach(function(mk){
+      var sc=trainSubModel(mk,train);
+      var top5=Object.entries(sc).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
+      var cov=test.codes.filter(function(c){return top5.indexOf(c)>-1;}).length;
+      covered[mk]=testSlots>0?cov/testSlots:0;
+      if(cov>0) modelHits[mk]++;
+      modelTests[mk]++;
+    });
+    var ensResult=buildEnsembleScores(train,null);
+    var ensTop5=Object.entries(ensResult.ensemble).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
+    var ensCov=test.codes.filter(function(c){return ensTop5.indexOf(c)>-1;}).length;
+    var slotPct=testSlots>0?Math.round(ensCov/testSlots*100):0;
+    steps.push({refill:i+1,date:test.date.slice(5),slotPct:slotPct,ensCov:ensCov,testSlots:testSlots});
+  }
+  var avgSlotCov=steps.length?Math.round(mean(steps.map(function(s){return s.slotPct;}))):0;
+  var modelAvg={};
+  Object.keys(MODEL_DEFS_ORIG).forEach(function(mk){modelAvg[mk]=modelTests[mk]>0?Math.round(modelHits[mk]/modelTests[mk]*100):0;});
+  return {steps:steps,avgSlotCov:avgSlotCov,modelAvg:modelAvg};
+}
+
+// ── K-FOLD CROSS-VALIDATION ──────────────────
+function runKFoldCV(entries,k){
+  k=k||5;
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var n=sorted.length;
+  if(n<k*2) return {folds:[],avgSlotCov:0,stdSlotCov:0};
+  var foldSize=Math.floor(n/k);
+  var foldResults=[];
+  for(var f=0;f<k;f++){
+    var testStart=f*foldSize,testEnd=f===k-1?n:testStart+foldSize;
+    var testFold=sorted.slice(testStart,testEnd);
+    var trainFold=sorted.slice(0,testStart).concat(sorted.slice(testEnd));
+    if(trainFold.length<3) continue;
+    var ensResult=buildEnsembleScores(trainFold,null);
+    var top5=Object.entries(ensResult.ensemble).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
+    var totalSlots=0,covered=0;
+    testFold.forEach(function(e){covered+=e.codes.filter(function(c){return top5.indexOf(c)>-1;}).length;totalSlots+=e.codes.length;});
+    foldResults.push({fold:f+1,slotPct:totalSlots>0?Math.round(covered/totalSlots*100):0,testSize:testFold.length,trainSize:trainFold.length});
+  }
+  var vals=foldResults.map(function(f){return f.slotPct;});
+  return {folds:foldResults,avgSlotCov:Math.round(mean(vals)),stdSlotCov:Math.round(std(vals))};
+}
+
+// ── PERMUTATION IMPORTANCE ───────────────────
+function computePermImportance(entries){
+  var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var n=sorted.length;
+  if(n<8) return {importance:{},baseline:0};
+  var holdN=Math.min(3,Math.max(1,Math.floor(n*0.25)));
+  var train=sorted.slice(0,n-holdN),test=sorted.slice(n-holdN);
+  function evalEns(trainData){
+    var res=buildEnsembleScores(trainData,null);
+    var top5=Object.entries(res.ensemble).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
+    var tot=0,cov=0;
+    test.forEach(function(e){cov+=e.codes.filter(function(c){return top5.indexOf(c)>-1;}).length;tot+=e.codes.length;});
+    return tot>0?cov/tot:0;
+  }
+  var baseline=evalEns(train);
+  var importance={};
+  var defs=getModelDefs();
+  SIGNAL_KEYS.forEach(function(k){
+    var ablated=JSON.parse(JSON.stringify(defs));
+    Object.keys(ablated).forEach(function(mk){ablated[mk].weights[k]=0;});
+    // Temporarily override MODEL_DEFS
+    var origDefs=JSON.parse(JSON.stringify(MODEL_DEFS_ORIG));
+    Object.keys(MODEL_DEFS_ORIG).forEach(function(mk){MODEL_DEFS_ORIG[mk]=ablated[mk];});
+    var ablScore=evalEns(train);
+    Object.keys(MODEL_DEFS_ORIG).forEach(function(mk){MODEL_DEFS_ORIG[mk]=origDefs[mk];});
+    importance[k]=Math.max(0,baseline-ablScore);
+  });
+  return {importance:importance,baseline:Math.round(baseline*100)};
+}
+
+// ── PLATT SCALING ────────────────────────────
+function plattScale(scores,params){
+  var A=params?params.A:-4,B=params?params.B:2;
+  var result={};
+  Object.keys(scores).forEach(function(c){result[c]=1/(1+Math.exp(A*scores[c]+B));});
+  return result;
+}
+function fitPlattParams(preds,scores){
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  if(resolved.length<5) return {A:-4,B:2};
+  var A=-4,B=2,lr=0.1;
+  for(var iter=0;iter<50;iter++){
+    var dA=0,dB=0,n=0;
+    resolved.forEach(function(p){
+      p.predictedCodes.forEach(function(c){
+        var s=scores[c]||0.5;
+        var y=p.outcome[c]==='hit'?1:0;
+        var pred=1/(1+Math.exp(A*s+B));
+        dA+=( pred-y)*s;dB+=(pred-y);n++;
+      });
+    });
+    if(n>0){A-=lr*dA/n;B-=lr*dB/n;}
+  }
+  return {A:A,B:B};
+}
+
+// ── BOOTSTRAP CI ────────────────────────────
+function bootstrapCI(entries,code,nBoots){
+  nBoots=nBoots||60;
+  var boots=[];
+  for(var b=0;b<nBoots;b++){
+    var sample=[];
+    for(var i=0;i<entries.length;i++) sample.push(entries[Math.floor(Math.random()*entries.length)]);
+    var res=buildEnsembleScores(sample,null);
+    var top5=Object.entries(res.ensemble).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
+    boots.push(top5.indexOf(code)>-1?1:0);
+  }
+  boots.sort(function(a,b){return a-b;});
+  return {prob:mean(boots),lo:boots[Math.floor(nBoots*0.05)],hi:boots[Math.floor(nBoots*0.95)]};
+}
+
+// ── REBUILD ML MODELS ────────────────────────
+function renderRebuildPills(){
+  var el=document.getElementById('rebuild-shop-pills');
+  if(!el) return;
+  db=loadDB();
+  var shops=Object.keys(db.shops).sort();
+  if(!shops.length){ el.innerHTML='<span style="font-size:12px;color:var(--muted)">No shops yet.</span>'; return; }
+  el.innerHTML=shops.map(function(code){
+    var s=db.shops[code];
+    var n=(s.entries||[]).length;
+    var p=(s.predictions||[]).filter(function(p){return p.status!=='pending';}).length;
+    var m=s.models?'✅':'—';
+    var isActive=code===activeShop;
+    return '<button onclick="rebuildProModels(\''+code+'\')" '
+      +'style="font-family:var(--mono);font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px;'
+      +'border:1px solid '+(isActive?'var(--amber)':'var(--border)')+';'
+      +'background:'+(isActive?'rgba(245,158,11,.15)':'var(--surface2)')+';'
+      +'color:'+(isActive?'var(--amber)':'var(--muted)')+';cursor:pointer">'
+      +code+'<span style="font-size:10px;opacity:.7"> '+n+'↓ '+m+'</span>'
+      +'</button>';
+  }).join('');
+  var btn=document.getElementById('rebuild-one-btn');
+  if(btn){ btn.style.display=activeShop?'block':'none'; if(activeShop) btn.textContent='🔧 Rebuild '+activeShop+' Only'; }
+}
+
+function rebuildActiveShopPro(){
+  if(!activeShop){ showToast('Select a shop first'); return; }
+  rebuildProModels(activeShop);
+}
+
+function rebuildProModels(onlyShop){
+  // Immediate haptic + visual feedback
+  if(navigator.vibrate) navigator.vibrate([40,30,40]);
+  document.querySelectorAll('button').forEach(function(btn){
+    if(btn.textContent.indexOf('Rebuild')>-1){
+      btn.style.opacity='0.5'; btn.style.transform='scale(0.97)';
+      setTimeout(function(){btn.style.opacity='';btn.style.transform='';},300);
+    }
+  });
+  db=loadDB();
+  var targetShop=onlyShop||activeShop;
+  if(!targetShop||!db.shops[targetShop]){
+    document.getElementById('rebuild-result').innerHTML='<div class="alert alert-warn">No active shop.</div>';
+    return;
+  }
+  document.getElementById('rebuild-result').innerHTML='<div class="alert alert-info" style="display:flex;align-items:center;gap:10px">'
+    +'<div style="width:16px;height:16px;border:2px solid var(--teal);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div>'
+    +'<span>Training '+(onlyShop?onlyShop:'active shop')+' models…</span></div>';
+  setTimeout(function(){
+    var entries=proShopEntries(targetShop);
+    if(entries.length<6){
+      document.getElementById('rebuild-result').innerHTML='<div class="alert alert-warn">Need 6+ entries to train models.</div>';
+      return;
+    }
+    var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+    var preds=proShopPreds(targetShop);
+    var wf=runWalkForward(sorted);
+    var kf=runKFoldCV(sorted,5);
+    var ensResult=buildEnsembleScores(sorted,wf.modelAvg);
+    var top5=Object.entries(ensResult.ensemble).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+    var calibParams=fitPlattParams(preds,ensResult.ensemble);
+    var calibProbs=plattScale(ensResult.ensemble,calibParams);
+    var ciData={};
+    top5.forEach(function(x){ciData[x[0]]=bootstrapCI(sorted,x[0],60);});
+    var permResult=computePermImportance(sorted);
+    var regime=detectRegimeShift(sorted);
+    var codeStates=classifyCodeStates(sorted);
+    var momResult=buildMomentumScore(sorted);
+
+    // Build combined snapshot for Insight compatibility
+    var ensScores=ensResult.ensemble;
+    var maxEns=Math.max.apply(null,Object.values(ensScores).concat([0.001]));
+    var snapshots={};
+    top5.forEach(function(x){
+      var c=x[0];
+      snapshots[c]=buildFeatureVector(c,sorted);
+    });
+    var weights=Object.assign({},DEFAULT_WEIGHTS);
+
+    // Build watchouts using Insight engine
+    var bcsResult={scores:ensScores,snapshots:snapshots,weights:weights,
+                   regime:regime,momentum:momResult.raw||{}};
+    var top5Codes=top5.map(function(x){return x[0];});
+    var watchouts=buildWatchouts(sorted,preds,bcsResult,top5Codes,targetShop);
+
+    // Build emergent patterns
+    var patterns=buildEmergentPatterns(sorted,preds);
+
+    // Plain English summary
+    var summary=buildPlainEnglishSummary(sorted,preds,top5Codes,bcsResult,targetShop);
+
+    // Co-occurrence implications
+    var cooccur=buildCooccurImplications(sorted,top5Codes);
+
+    // Historical similarity
+    var similarity=buildHistoricalSimilarity(sorted,3);
+
+    // Refill confidence score
+    var rcs=buildRefillConfidenceScore(sorted,preds,top5Codes,bcsResult,targetShop);
+
+    db.shops[targetShop].models={
+      walkForward:wf,kFold:kf,
+      ensembleScores:ensScores,modelScores:ensResult.modelScores,
+      calibParams:calibParams,calibProbs:calibProbs,ciData:ciData,
+      permImportance:permResult,regime:regime,codeStates:codeStates,
+      momentum:momResult,patterns:patterns,cooccur:cooccur,
+      similarity:similarity,watchouts:watchouts,
+      summary:summary,rcs:rcs,
+      snapshots:snapshots,weights:weights,
+      top5:top5Codes,builtAt:new Date().toISOString()
+    };
+
+    // Store full scores map for triggered outcome scoring
+    db.shops[targetShop].lastFullScores=ensScores;
+
+    // Auto-generate pending prediction
+    db.shops[targetShop].predictions=db.shops[targetShop].predictions||[];
+    db.shops[targetShop].predictions.forEach(function(p){if(p.status==='pending') p.status='expired';});
+    db.shops[targetShop].predictions.push({
+      id:Date.now(),createdDate:sorted[sorted.length-1].date,
+      predictedCodes:top5Codes,scores:ensScores,
+      calibProbs:calibProbs,modelScores:ensResult.modelScores,
+      signalSnapshot:snapshots,weightsAtTime:weights,
+      watchoutCodes:watchouts.map(function(w){return w.code;}),
+      promotedCodes:[],
+      patternRules:(models2&&models2.patterns||[]).filter(function(p){return p.triggered;}).map(function(p){return (p.rule||'').slice(0,40);}),
+      regimeAtTime:regime?{shifting:regime.shifting,note:regime.note||''}:null,
+      status:'pending',outcome:null,auto:true
+    });
+    saveDB(db);
+
+    // Learn thresholds
+    learnAndStoreThresholds(targetShop);
+
+    var msg='Models trained — '+wf.avgSlotCov+'% slot coverage (walk-forward) · '+kf.avgSlotCov+'±'+kf.stdSlotCov+'% (k-fold)';
+    document.getElementById('rebuild-result').innerHTML='<div class="alert alert-success">'+msg+'</div>';
+    if(navigator.vibrate) navigator.vibrate([30,20,30,20,80]);
+    renderShopPills();
+    if(curPanel()==='predict') renderPredict();
+    if(curPanel()==='analyze') renderAnalyze();
+    if(curPanel()==='track')   renderTrack();
+  },50);
+}
+
+// ── AUTO-RESOLVE ─────────────────────────────
+function autoResolveEntry(date, codes){
+  if(!activeShop) return;
+  db=loadDB();
+  var preds=proShopPreds(activeShop);
+  var changed=false;
+  preds.filter(function(p){return p.status==='pending'&&date>p.createdDate;}).forEach(function(p){
+    var outcome={};
+    var avgQty=buildAvgQty(proShopEntries(activeShop));
+    p.predictedCodes.forEach(function(c){
+      var cnt=codes.filter(function(x){return x===c;}).length;
+      outcome[c]=cnt===0?'miss':cnt>=Math.round(avgQty[c]||1)?'hit':'partial';
+    });
+    p.slotsCovered=codes.filter(function(c){return p.predictedCodes.indexOf(c)>-1;}).length;
+    p.totalSlots=codes.length;
+    p.status=resolveStatus(outcome);
+    p.outcome=outcome;p.actualDate=date;p.actualCodes=Array.from(new Set(codes));
+    // Track triggered outcomes
+    var allTriggered=Array.from(new Set((p.promotedCodes||[]).concat(p.watchoutCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;})));
+    var maxS=Math.max.apply(null,Object.values(p.scores||{}).concat([0.001]));
+    var triggeredOutcome={};
+    allTriggered.forEach(function(c){
+      triggeredOutcome[c]={appeared:codes.indexOf(c)>-1,type:(p.promotedCodes&&p.promotedCodes.indexOf(c)>-1)?'promoted':'watchout',scorePct:p.scores&&p.scores[c]?Math.round(p.scores[c]/maxS*100):null};
+    });
+    p.triggeredOutcome=triggeredOutcome;
+    // Track triggered outcomes
+    var allT=Array.from(new Set((p.promotedCodes||[]).concat(p.watchoutCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;})));
+    var mxS=Math.max.apply(null,Object.values(p.scores||{}).concat([0.001]));
+    var tOut={};
+    allT.forEach(function(c){tOut[c]={appeared:codes.indexOf(c)>-1,type:(p.promotedCodes&&p.promotedCodes.indexOf(c)>-1)?'promoted':'watchout',scorePct:p.scores&&p.scores[c]?Math.round(p.scores[c]/mxS*100):null};});
+    p.triggeredOutcome=tOut;
+    // Track triggered outcomes with full scores for non-top5 codes
+    var allT=Array.from(new Set((p.promotedCodes||[]).concat(p.watchoutCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;})));
+    var fullSc=db.shops[activeShop]&&db.shops[activeShop].lastFullScores||{};
+    var mxS=Math.max.apply(null,Object.values(fullSc).concat(Object.values(p.scores||{})).concat([0.001]));
+    var tOut={};
+    allT.forEach(function(c){
+      var sc=fullSc[c]||(p.scores&&p.scores[c])||0;
+      tOut[c]={appeared:codes.indexOf(c)>-1,type:(p.promotedCodes&&p.promotedCodes.indexOf(c)>-1)?'promoted':'watchout',scorePct:sc>0?Math.round(sc/mxS*100):null};
+    });
+    p.triggeredOutcome=tOut;
+    changed=true;
+  });
+  if(changed){ saveDB(db); setTimeout(function(){learnAndStoreThresholds(activeShop);},100); }
+}
+
+// ── SAVE ENTRY ───────────────────────────────
+function saveProEntry(){
+  if(!activeShop){showToast('Select a shop first');return;}
+  var date=document.getElementById('pro-date').value||todayStr();
+  var codes=codesFromText(document.getElementById('pro-codes').value);
+  if(!codes.length){showToast('Enter at least one code');return;}
+  db=loadDB();
+  var entries=db.shops[activeShop].entries||[];
+  var sig=date+'|'+codes.slice().sort().join(',');
+  if(entries.some(function(e){return e.date+'|'+e.codes.slice().sort().join(',')===sig;})){showToast('Already exists');return;}
+  entries.push({id:Date.now(),date:date,codes:codes,source:'manual'});
+  entries.sort(function(a,b){return a.date.localeCompare(b.date);});
+  db.shops[activeShop].entries=entries;
+  autoResolveEntry(date,codes);
+  saveDB(db);
+  document.getElementById('pro-codes').value='';
+  document.getElementById('collect-result').innerHTML='<div class="alert alert-success">Saved '+codes.length+' codes for '+date+'. Run Rebuild to update ML models.</div>';
+}
+
+// ── IMPORT ───────────────────────────────────
+function importInsightData(input){
+  var file=input.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      var parsed=JSON.parse(ev.target.result);
+      db=loadDB();
+      var shops=parsed.shops||{};
+      if(parsed.shop&&parsed.data) shops[parsed.shop]=parsed.data;
+      var imported=0;
+      Object.keys(shops).forEach(function(code){
+        var src=shops[code];
+        if(!db.shops[code]) db.shops[code]={name:src.name||'',entries:[],predictions:[],models:null};
+        var existing=new Set(db.shops[code].entries.map(function(e){return e.date+'|'+e.codes.slice().sort().join(',');}));
+        (src.entries||[]).forEach(function(e){
+          var sig=e.date+'|'+e.codes.slice().sort().join(',');
+          if(!existing.has(sig)){db.shops[code].entries.push({id:e.id||Date.now(),date:e.date,codes:e.codes,source:'import'});imported++;}
+        });
+        db.shops[code].entries.sort(function(a,b){return a.date.localeCompare(b.date);});
+      });
+      saveDB(db);
+      renderShopPills();
+      document.getElementById('import-result').innerHTML='<div class="alert alert-success">Imported '+imported+' entries across '+Object.keys(shops).length+' shop(s). Run Rebuild to train models.</div>';
+    }catch(e){document.getElementById('import-result').innerHTML='<div class="alert alert-error">Error: '+e.message+'</div>';}
+  };
+  reader.readAsText(file);
+}
+function clearProData(){ if(!confirm('Clear all InsightPro data?')) return; localStorage.removeItem(PRO_KEY); db={shops:{}}; activeShop=null; renderShopPills(); showToast('Cleared'); }
+
+// ── RENDER PREDICT ───────────────────────────
+function renderPredict(){
+  if(!activeShop){ document.getElementById('predict-list').innerHTML='<div class="empty"><div class="empty-icon">🎯</div><p>Select a shop</p></div>'; return; }
+  db=loadDB();
+  var models=proShopModels(activeShop);
+  var entries=proShopEntries(activeShop);
+  var preds=proShopPreds(activeShop);
+  if(!models){
+    document.getElementById('predict-list').innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:20px 0">Import data then DATA → Rebuild</div>';
+    ['ensemble-detail','calibration-detail','pro-cooccur','pro-watchouts','pro-similarity','refill-conf-score','plain-summary'].forEach(function(id){var e=document.getElementById(id);if(e)e.innerHTML='';});
+    return;
+  }
+  var top5=models.top5||[];
+  var ens=models.ensembleScores||{};
+  var calib=models.calibProbs||{};
+  var ci=models.ciData||{};
+  var ms2=models.modelScores||{};
+  var wf=models.walkForward||{};
+  var maxEns=top5.reduce(function(m,c){return Math.max(m,ens[c]||0);},0.001);
+  var avgCov=wf.avgSlotCov||0;
+  var confLevel=avgCov>=50?'high':avgCov>=30?'moderate':'low';
+  var confBadge=document.getElementById('model-conf-badge');
+  if(confBadge){
+    confBadge.className='verdict-'+confLevel;
+    confBadge.style.cssText='font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;';
+    confBadge.textContent=verdictLabel(confLevel)+' · '+avgCov+'% slot cov';
+  }
+  // Regime banner
+  var regime=models.regime||{shifting:false};
+  var rb=document.getElementById('regime-banner');
+  if(rb){if(regime.shifting){rb.style.display='block';rb.innerHTML='<div style="font-size:11px;color:var(--amber)">⚡ Pattern shift — '+regime.note+'</div>';}else rb.style.display='none';}
+  // Refill confidence score
+  var rcs=models.rcs;
+  var rcsEl=document.getElementById('refill-conf-score');
+  if(rcsEl&&rcs){
+    rcsEl.style.display='block';
+    rcsEl.innerHTML='<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:11px;color:var(--muted)">Refill confidence:</span>'
+      +'<span style="font-size:20px;font-weight:900;font-family:var(--mono);color:'+(rcs.col||'var(--amber)')+'">'+(rcs.score||0)+'</span>'
+      +'<span style="font-size:14px;font-weight:800;color:'+(rcs.col||'var(--amber)')+'">['+(rcs.grade||'—')+']</span>'
+      +'<span style="font-size:10px;color:var(--muted);margin-left:auto">walk-forward: '+avgCov+'%</span>'
+      +'</div>';
+  }
+  // Plain summary
+  var summaryEl=document.getElementById('plain-summary');
+  if(summaryEl&&models.summary){summaryEl.style.display='block';summaryEl.innerHTML=models.summary;}
+  // Top-5
+  var medals=['🥇','🥈','🥉','4️⃣','5️⃣'];
+  var rankCols=['var(--amber)','var(--teal)','var(--violet)','var(--green)','var(--muted)'];
+  var codeStates=models.codeStates||{};
+  var lt=proShopThresholds(activeShop);
+
+  document.getElementById('predict-list').innerHTML=top5.map(function(code,i){
+    var prob=Math.round((calib[code]||0)*100);
+    var raw=Math.round((ens[code]||0)/maxEns*100);
+    var ciInfo=ci[code]||{prob:0,lo:0,hi:0};
+    var col=rankCols[i]||'var(--muted)';
+    var st=codeStates[code]||{state:'active'};
+    var stateBadge=st.state==='emerging'?'<span style="font-size:9px;color:var(--sig-momentum);background:rgba(232,121,249,.15);padding:1px 5px;border-radius:6px">↑ EMERGING</span>'
+      :st.state==='fading'?'<span style="font-size:9px;color:var(--rose);background:rgba(244,63,94,.15);padding:1px 5px;border-radius:6px">↓ FADING</span>':''
+    ;
+    // Grade
+    var snap=models.snapshots&&models.snapshots[code]||{};
+    var grade=buildCodeConfidenceGrade(code,snap,models.weights||DEFAULT_WEIGHTS,entries,preds,activeShop,raw);
+    // Threshold
+    var threshNote='';
+    if(lt&&lt.perCode&&lt.perCode[code]){
+      var t=lt.perCode[code];
+      var above=raw>=t.thresholdPct;
+      threshNote='<span style="font-size:9px;color:'+(above?'var(--green)':'var(--gold)')+'">'+(above?'▲':'▼')+' '+t.thresholdPct+'%</span>';
+    }
+    return '<div class="pred-row">'
+      +'<span class="pred-medal">'+(medals[i]||'')+'</span>'
+      +'<span class="pred-code" style="color:'+col+'">'+(code)+'</span>'
+      +'<div class="pred-detail">'
+        +stateBadge+' '+threshNote
+        +'<div style="height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;margin-top:2px">'
+          +'<div style="width:'+prob+'%;height:100%;background:'+col+'"></div>'
+        +'</div>'
+        +'<div class="ci-track">'
+          +'<div class="ci-range" style="left:'+Math.round(ciInfo.lo*100)+'%;width:'+Math.max(1,Math.round((ciInfo.hi-ciInfo.lo)*100))+'%;background:'+col+'"></div>'
+          +'<div class="ci-point" style="left:'+prob+'%"></div>'
+        +'</div>'
+      +'</div>'
+      +'<span style="font-size:12px;font-family:var(--mono);font-weight:700;color:'+col+'">'+(prob)+'%</span>'
+      +'<span style="font-size:11px;font-weight:900;font-family:var(--mono);color:'+(grade.col||'var(--muted)')+'">['+(grade.grade||'—')+']</span>'
+      +'</div>';
+  }).join('');
+
+  // Ensemble
+  var mkNames=Object.keys(MODEL_DEFS_ORIG);
+  document.getElementById('ensemble-detail').innerHTML=
+    '<div style="font-size:10px;color:var(--muted);display:grid;grid-template-columns:1fr '+top5.map(function(){return '28px';}).join(' ')+';gap:4px;padding-bottom:4px;border-bottom:1px solid var(--border);margin-bottom:4px">'
+    +'<span>Model</span>'+top5.map(function(c){return '<span style="text-align:center;font-family:var(--mono);font-weight:700;font-size:10px">'+(c)+'</span>';}).join('')
+    +'</div>'
+    +mkNames.map(function(mk){
+      var def=MODEL_DEFS_ORIG[mk];
+      var sc=ms2[mk]||{};
+      var maxSc=Math.max.apply(null,top5.map(function(c){return sc[c]||0;}).concat([0.001]));
+      var acc=wf.modelAvg?wf.modelAvg[mk]:0;
+      return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0">'
+        +'<div style="width:8px;height:8px;border-radius:50%;background:'+(def.color)+';flex-shrink:0"></div>'
+        +'<span style="font-size:10px;color:var(--muted);min-width:80px">'+(def.name)+' ('+(acc)+'%)</span>'
+        +top5.map(function(c){
+          var pct=Math.round((sc[c]||0)/maxSc*100);
+          return '<div style="width:28px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-family:var(--mono);color:var(--text);background:'+(def.color).replace(')',','+Math.max(0.05,pct/100*0.5)+')')+ '">'+pct+'</div>';
+        }).join('')
+        +'</div>';
+    }).join('');
+
+  // Calibration + CI
+  document.getElementById('calibration-detail').innerHTML=top5.map(function(code,i){
+    var prob=Math.round((calib[code]||0)*100);
+    var ciInfo=ci[code]||{lo:0,hi:1};
+    var col=rankCols[i]||'var(--muted)';
+    return '<div style="padding:5px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:3px">'
+        +'<span style="font-family:var(--mono);font-weight:800;color:'+col+'">'+(code)+'</span>'
+        +'<span style="font-size:11px;color:var(--muted)">'+prob+'% · CI '+Math.round(ciInfo.lo*100)+'–'+Math.round(ciInfo.hi*100)+'%</span>'
+      +'</div>'
+      +'<div class="ci-track">'
+        +'<div class="ci-range" style="left:'+Math.round(ciInfo.lo*100)+'%;width:'+Math.max(1,Math.round((ciInfo.hi-ciInfo.lo)*100))+'%;background:'+col+'"></div>'
+        +'<div class="ci-point" style="left:'+prob+'%"></div>'
+      +'</div></div>';
+  }).join('');
+
+  // Co-occurrence
+  var coocEl=document.getElementById('pro-cooccur');
+  if(coocEl&&models.cooccur){
+    var imps=models.cooccur;
+    if(!imps.length){coocEl.innerHTML='<p style="font-size:12px;color:var(--muted)">No strong co-occurrence implications.</p>';}
+    else {
+      var tight=imps.filter(function(x){return x.tight;});
+      var strong=imps.filter(function(x){return !x.tight&&x.rate>=70;});
+      var mod=imps.filter(function(x){return !x.tight&&x.rate<70;});
+      var html='';
+      if(tight.length){
+        html+='<div style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;padding:8px;margin-bottom:6px">'
+          +'<div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px">TIGHT PAIRS</div>'
+          +tight.map(function(imp){return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+            +'<span style="font-family:var(--mono);font-weight:800;font-size:14px;color:var(--green)">'+(imp.impliedCode)+'</span>'
+            +'<span style="font-size:10px;color:var(--muted)">via '+(imp.via)+'</span>'
+            +'<span style="margin-left:auto;font-family:var(--mono);font-weight:700;color:var(--green)">'+(imp.rate)+'%</span>'
+            +'</div>'}).join('')
+          +'</div>';
+      }
+      if(strong.length) html+=strong.map(function(imp){return '<div class="freq-row">'
+        +'<span class="freq-code">'+(imp.impliedCode)+'</span>'
+        +'<div class="freq-bar-wrap"><div class="freq-bar" style="width:'+(imp.rate)+'%;background:var(--sig-cooccur)"></div></div>'
+        +'<span class="freq-val">'+(imp.rate)+'% via '+(imp.via)+'</span></div>'}).join('');
+      if(mod.length) html+='<div style="font-size:11px;color:var(--muted);margin-top:4px">Moderate: '+mod.map(function(x){return x.impliedCode+' '+x.rate+'%';}).join(' · ')+'</div>';
+      coocEl.innerHTML=html;
+    }
+  }
+
+  // Watchouts
+  var woEl=document.getElementById('pro-watchouts');
+  if(woEl&&models.watchouts){
+    if(!models.watchouts.length){woEl.innerHTML='<p style="font-size:12px;color:var(--muted)">No triggered watchouts outside top-5.</p>';}
+    else woEl.innerHTML=models.watchouts.map(function(w){
+      var top=w.topTrigger;
+      var confCol=w.maxConf>=80?'var(--green)':w.maxConf>=65?'var(--amber)':'var(--muted)';
+      return '<div style="padding:7px 0;border-bottom:1px solid var(--border)">'
+        +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">'
+          +'<span style="font-family:var(--mono);font-weight:900;font-size:15px;color:'+(top.col)+'">'+(w.code)+'</span>'
+          +'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:'+(confCol)+';font-weight:700">'+(top.icon)+' '+(top.label)+'</span>'
+          +'<span style="font-size:10px;color:var(--muted);margin-left:auto">rank #'+(w.rank)+' · '+(w.scorePct)+'%</span>'
+        +'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+(top.detail)+'</div>'
+        +'<div style="height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;margin-top:4px">'
+          +'<div style="width:'+(w.maxConf)+'%;height:100%;background:'+(confCol)+'"></div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+  }
+
+  // Score thresholds
+  var stEl=document.getElementById('pro-score-thresholds');
+  if(stEl){
+    var shopT=buildShopThresholds(entries,preds);
+    var surpriseT=buildSurpriseThreshold(entries,preds);
+    if(!shopT&&!surpriseT){
+      stEl.innerHTML='<p style="font-size:12px;color:var(--muted)">Need 5+ resolved predictions.</p>';
+    } else {
+      var maxEns2=Math.max.apply(null,Object.values(models.ensembleScores||{}).concat([0.001]));
+      var stHtml='';
+      if(shopT&&shopT.shopThreshold!==null){
+        stHtml+='<div style="margin-bottom:8px">'
+          +'<div style="font-size:11px;font-weight:700;color:var(--text)">🎯 Hit threshold: <span style="font-family:var(--mono);color:var(--green)">'+shopT.shopThreshold+'%+</span></div>'
+          +'<div style="font-size:11px;color:var(--muted)">Overall hit rate: '+shopT.overallHitRate+'% · '+(shopT.resolvedCount)+' predictions</div>'
+          +'<div style="display:flex;align-items:flex-end;gap:2px;height:40px;margin-top:6px">';
+        shopT.bands.forEach(function(b){
+          var h=Math.max(3,Math.round(b.hitRate*0.38));
+          var col=b.hitRate>=70?'var(--green)':b.hitRate>=50?'var(--amber)':'var(--rose)';
+          var isAbove=b.lo>=shopT.shopThreshold;
+          stHtml+='<div style="flex:1;display:flex;flex-direction:column;align-items:center">'
+            +'<div style="font-size:8px;color:'+col+';height:11px">'+b.hitRate+'%</div>'
+            +'<div style="width:100%;height:'+h+'px;background:'+col+';border-radius:2px 2px 0 0;opacity:'+(isAbove?1:0.35)+'"></div>'
+            +'</div>';
+        });
+        stHtml+='</div><div style="display:flex;gap:2px">';
+        shopT.bands.forEach(function(b){stHtml+='<div style="flex:1;font-size:8px;color:var(--muted);text-align:center">'+b.lo+'</div>';});
+        stHtml+='</div></div>';
+      }
+      if(surpriseT&&surpriseT.surpriseThreshold!==null){
+        stHtml+='<div style="font-size:11px;font-weight:700;color:var(--text)">🎯 Surprise zone: <span style="font-family:var(--mono);color:var(--sig-momentum)">'+surpriseT.surpriseThreshold+'%+</span></div>'
+          +'<div style="font-size:11px;color:var(--muted)">Non-predicted codes at this score appear as surprises above-average rate.</div>';
+      }
+      stEl.innerHTML=stHtml||'<p style="font-size:12px;color:var(--muted)">Threshold data building…</p>';
+    }
+  }
+
+  // Historical similarity
+  var simEl=document.getElementById('pro-similarity');
+  if(simEl&&models.similarity&&models.similarity.length){
+    simEl.innerHTML=models.similarity.map(function(m){
+      var simCol=m.similarity>=80?'var(--green)':m.similarity>=65?'var(--amber)':'var(--muted)';
+      return '<div style="padding:6px 0;border-bottom:1px solid var(--border)">'
+        +'<div style="display:flex;gap:8px;margin-bottom:3px">'
+          +'<span style="font-size:11px;font-weight:700;color:'+(simCol)+'">'+(m.similarity)+'% similar</span>'
+          +'<span style="font-size:10px;color:var(--muted)">Refills #'+(m.startIdx)+'→#'+(m.endIdx)+'</span>'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--muted)">Followed by: '
+          +m.followingCodes.map(function(c){
+            var inT=top5.indexOf(c)>-1;
+            return '<span style="font-family:var(--mono);font-weight:700;color:'+(inT?'var(--amber)':'var(--muted)')+'">'+(c)+(inT?' ★':'')+'</span>';
+          }).join(' ')
+        +'</div></div>';
+    }).join('');
+  } else if(simEl){
+    simEl.innerHTML='<p style="font-size:12px;color:var(--muted)">Need 8+ entries for similarity matching.</p>';
+  }
+}
+
+// ── RENDER ANALYZE ───────────────────────────
+function renderAnalyze(){
+  if(!activeShop) return;
+  db=loadDB();
+  var models=proShopModels(activeShop);
+  if(!models){
+    ['wf-chart','kfold-results','perm-importance','calib-curve','pro-thresholds','pro-patterns','pro-momentum','pro-regime']
+      .forEach(function(id){var e=document.getElementById(id);if(e)e.innerHTML='<div style="color:var(--muted);font-size:12px">Run Rebuild first.</div>';});
+    return;
+  }
+  var wf=models.walkForward||{};
+  var kf=models.kFold||{};
+  var perm=models.permImportance||{};
+  var entries=proShopEntries(activeShop);
+  var preds=proShopPreds(activeShop);
+
+  // Walk-forward chart
+  var steps=wf.steps||[];
+  var wfHtml='<div style="display:flex;align-items:flex-end;gap:2px;height:60px;margin-bottom:6px">';
+  steps.slice(-20).forEach(function(s){
+    var h=Math.max(4,Math.round(s.slotPct*0.58));
+    var col=s.slotPct>=50?'var(--green)':s.slotPct>=25?'var(--amber)':'var(--rose)';
+    wfHtml+='<div style="flex:1;height:'+h+'px;background:'+col+';border-radius:2px 2px 0 0;min-width:8px" title="'+s.date+': '+s.slotPct+'%"></div>';
+  });
+  wfHtml+='</div>';
+  wfHtml+='<div style="font-size:11px;color:var(--muted);display:flex;justify-content:space-between">'
+    +'<span>'+steps.length+' refills tested</span>'
+    +'<span>Avg: <strong style="color:var(--amber)">'+avgStr(wf.avgSlotCov)+'%</strong></span></div>';
+  wfHtml+='<div style="margin-top:8px">';
+  Object.keys(MODEL_DEFS_ORIG).forEach(function(mk){
+    var def=MODEL_DEFS_ORIG[mk];
+    var acc=wf.modelAvg?wf.modelAvg[mk]:0;
+    wfHtml+='<div class="sig-imp-row">'
+      +'<div class="sig-dot" style="background:'+(def.color)+'"></div>'
+      +'<span class="sig-name">'+(def.name)+'</span>'
+      +'<div class="sig-bar-wrap"><div class="sig-bar" style="width:'+(acc)+'%;background:'+(def.color)+'"></div></div>'
+      +'<span style="font-size:11px;font-family:var(--mono);font-weight:700;min-width:36px;text-align:right">'+(acc)+'%</span>'
+      +'</div>';
+  });
+  wfHtml+='</div>';
+  document.getElementById('wf-chart').innerHTML=wfHtml;
+
+  // K-fold
+  document.getElementById('kfold-results').innerHTML=
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Avg: <strong style="color:var(--amber)">'+(kf.avgSlotCov||0)+'%</strong> ± '+(kf.stdSlotCov||0)+'%</div>'
+    +(kf.folds||[]).map(function(f){
+      var col=f.slotPct>=50?'var(--green)':f.slotPct>=25?'var(--amber)':'var(--rose)';
+      return '<div class="freq-row"><span class="freq-code">Fold '+(f.fold)+'</span>'
+        +'<div class="freq-bar-wrap"><div class="freq-bar" style="width:'+(f.slotPct)+'%;background:'+(col)+'"></div></div>'
+        +'<span class="freq-val" style="color:'+(col)+'">'+(f.slotPct)+'%</span></div>';
+    }).join('');
+
+  // Permutation importance
+  var impData=perm.importance||{};
+  var impSorted=Object.entries(impData).sort(function(a,b){return b[1]-a[1];});
+  var maxImp=impSorted.length?Math.max(impSorted[0][1],0.001):0.001;
+  document.getElementById('perm-importance').innerHTML=
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Baseline: <strong>'+(perm.baseline||0)+'%</strong> slot coverage</div>'
+    +impSorted.map(function(x){
+      var k=x[0],imp=x[1];
+      var drop=Math.round(imp*100);
+      var barW=Math.round(imp/maxImp*100);
+      var col=drop>=5?'var(--green)':drop>=2?'var(--amber)':'var(--muted)';
+      var badge=drop>=5?'<span class="sig-badge sb-key">KEY</span>':drop>=2?'<span class="sig-badge sb-mod">USEFUL</span>':'<span class="sig-badge sb-low">NOISE</span>';
+      return '<div class="sig-imp-row">'
+        +'<div class="sig-dot" style="background:'+(SIGNAL_COLORS[k]||'var(--muted)')+'"></div>'
+        +'<span class="sig-name">'+(SIGNAL_NAMES[k]||k)+'</span>'
+        +'<div class="sig-bar-wrap"><div class="sig-bar" style="width:'+(barW)+'%;background:'+(col)+'"></div></div>'
+        +'<span style="font-size:11px;font-family:var(--mono);font-weight:700;color:'+(col)+';min-width:36px;text-align:right">−'+(drop)+'%</span>'
+        +badge+'</div>';
+    }).join('');
+
+  // Calibration curve
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  var calibProbs=models.calibProbs||{};
+  var curveHtml='';
+  if(resolved.length>=5){
+    var bins=[];
+    for(var b=0;b<5;b++) bins.push({lo:b*0.2,hi:(b+1)*0.2,preds:[],hits:0});
+    resolved.forEach(function(p){p.predictedCodes.forEach(function(c){var prob=calibProbs[c]||0;var isHit=p.outcome[c]==='hit'?1:0;var bin=bins.find(function(bk){return prob>=bk.lo&&prob<bk.hi;});if(bin){bin.preds.push(prob);if(isHit)bin.hits++;}});});
+    curveHtml='<div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px">';
+    bins.forEach(function(bn){
+      var n=bn.preds.length,ar=n>0?bn.hits/n:null;
+      var midProb=bn.lo+0.1,h=Math.round(midProb*70);
+      var ah=ar!==null?Math.round(ar*70):null;
+      curveHtml+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">'
+        +'<div style="font-size:9px;color:var(--muted);height:14px">'+( ar!==null?Math.round(ar*100)+'%':' ')+'</div>'
+        +'<div style="width:100%;background:var(--surface2);border-radius:3px;height:'+h+'px;position:relative">'
+          +(ah!==null?'<div style="position:absolute;bottom:0;left:0;right:0;height:'+ah+'px;background:var(--teal);border-radius:3px;opacity:.7"></div>':'')+'</div>'
+        +'<div style="font-size:9px;color:var(--muted)">'+Math.round(midProb*100)+'%</div>'
+        +'</div>';
+    });
+    curveHtml+='</div><div style="font-size:10px;color:var(--muted)">X = predicted prob · Teal = actual hit rate · Perfect = teal fills grey fully</div>';
+  } else curveHtml='<p style="font-size:12px;color:var(--muted)">Need 5+ resolved predictions.</p>';
+  document.getElementById('calib-curve').innerHTML=curveHtml;
+
+  // Thresholds
+  renderProThresholds('pro-thresholds');
+
+  // Signal hit rates
+  var shrEl=document.getElementById('signal-hit-rates');
+  if(shrEl){
+    var resolvedForSig=preds.filter(function(p){return p.status!=='pending'&&p.outcome&&p.signalSnapshot;});
+    if(resolvedForSig.length<3){
+      shrEl.innerHTML='<p style="font-size:12px;color:var(--muted)">Need 3+ resolved predictions.</p>';
+    } else {
+      var sigHR={};
+      SIGNAL_KEYS.forEach(function(k){
+        var hH=0,hT=0,lH=0,lT=0;
+        resolvedForSig.forEach(function(p){
+          p.predictedCodes.forEach(function(c){
+            var snap2=p.signalSnapshot&&p.signalSnapshot[c];
+            if(!snap2) return;
+            var val=snap2[k]||0;
+            var isHit=p.outcome&&p.outcome[c]==='hit'?1:0;
+            if(val>=0.6){hT++;hH+=isHit;} else if(val<=0.35){lT++;lH+=isHit;}
+          });
+        });
+        sigHR[k]={
+          highHitRate:hT>=2?Math.round(hH/hT*100):null, highN:hT,
+          lowHitRate:lT>=2?Math.round(lH/lT*100):null,  lowN:lT
+        };
+      });
+      shrEl.innerHTML='<div style="font-size:9px;color:var(--muted);display:grid;grid-template-columns:8px 90px 1fr 40px 40px 40px;gap:4px;padding:3px 0;border-bottom:1px solid var(--border);margin-bottom:3px">'
+        +'<span></span><span>SIGNAL</span><span>WT</span><span style="text-align:right">HIGH</span><span style="text-align:right">LOW</span><span style="text-align:right">VERDICT</span>'
+        +'</div>'
+        +SIGNAL_KEYS.map(function(k){
+          var hr=sigHR[k]||{};
+          var ew=Math.round(((models.weights||DEFAULT_WEIGHTS)[k]||0)*100);
+          var hCol=hr.highHitRate!==null?(hr.highHitRate>=60?'var(--green)':hr.highHitRate>=30?'var(--amber)':'var(--rose)'):'var(--muted)';
+          var lCol=hr.lowHitRate!==null?(hr.lowHitRate>=60?'var(--green)':hr.lowHitRate>=30?'var(--amber)':'var(--rose)'):'var(--muted)';
+          var badge=hr.highHitRate!==null&&hr.lowHitRate!==null
+            ?(hr.highHitRate-hr.lowHitRate>=15?'<span style="font-size:9px;background:rgba(45,212,191,.15);color:var(--teal);padding:1px 5px;border-radius:6px">KEY</span>'
+              :hr.highHitRate-hr.lowHitRate>=-5?'<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--amber);padding:1px 5px;border-radius:6px">USEFUL</span>'
+              :'<span style="font-size:9px;background:rgba(107,114,128,.15);color:var(--muted);padding:1px 5px;border-radius:6px">NOISE</span>'):'';
+          var col=SIGNAL_COLORS[k]||'var(--muted)';
+          return '<div style="display:grid;grid-template-columns:8px 90px 1fr 40px 40px 40px;gap:4px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">'
+            +'<div style="width:7px;height:7px;border-radius:50%;background:'+col+'"></div>'
+            +'<span style="font-size:11px;color:var(--muted)">'+(SIGNAL_NAMES[k]||k)+'</span>'
+            +'<div style="height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">'
+              +'<div style="width:'+ew+'%;height:100%;background:'+col+'"></div>'
+            +'</div>'
+            +'<span style="font-size:11px;font-family:var(--mono);color:'+hCol+';text-align:right">'+(hr.highHitRate!==null?hr.highHitRate+'%':'—')+'</span>'
+            +'<span style="font-size:11px;font-family:var(--mono);color:'+lCol+';text-align:right">'+(hr.lowHitRate!==null?hr.lowHitRate+'%':'—')+'</span>'
+            +badge
+            +'</div>';
+        }).join('')
+        +'<div style="font-size:9px;color:var(--muted);margin-top:5px">HIGH = signal ≥0.6 · LOW = ≤0.35 · Needs 2+ cases per category</div>';
+    }
+  }
+
+  // Emergent patterns
+  var patterns=models.patterns||[];
+  var triggered=patterns.filter(function(p){return p.triggered&&p.confidence>=0.75&&p.cases>=3;});
+  document.getElementById('pro-patterns').innerHTML=triggered.length
+    ?triggered.map(function(p){
+      var conf=Math.round(p.confidence*100);
+      return '<div style="padding:8px;background:rgba(62,207,142,.06);border:1px solid rgba(62,207,142,.3);border-radius:8px;margin-bottom:6px">'
+        +'<div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:3px">✅ '+p.rule+'</div>'
+        +'<div style="font-size:10px;color:var(--muted)">'+p.evidence+' · '+conf+'% confidence</div>'
+        +'<div style="font-size:11px;color:var(--amber);margin-top:4px">'+p.detail+'</div>'
+        +'</div>';
+    }).join('')
+    :'<p style="font-size:12px;color:var(--muted)">No patterns triggered at ≥75% confidence.</p>';
+
+  // Momentum
+  var momResult=models.momentum||{};
+  var cs=models.codeStates||{};
+  var emerging=Object.entries(cs).filter(function(x){return x[1].state==='emerging';}).sort(function(a,b){return b[1].raw-a[1].raw;});
+  var fading=Object.entries(cs).filter(function(x){return x[1].state==='fading';}).sort(function(a,b){return a[1].raw-b[1].raw;});
+  var momHtml='';
+  if(emerging.length){momHtml+='<div style="font-size:11px;font-weight:700;color:var(--sig-momentum);margin-bottom:4px">↑ EMERGING</div>'
+    +emerging.slice(0,5).map(function(x){var pct=Math.round(x[1].raw*100);return '<div class="freq-row"><span class="freq-code" style="color:var(--sig-momentum)">'+(x[0])+'</span><div class="freq-bar-wrap"><div class="freq-bar" style="width:'+Math.min(100,pct*2)+'%;background:var(--sig-momentum)"></div></div><span class="freq-val" style="color:var(--sig-momentum)">+'+pct+'%</span></div>';}).join('');}
+  if(fading.length){momHtml+='<div style="font-size:11px;font-weight:700;color:var(--rose);margin:'+( emerging.length?'8':'0')+'px 0 4px">↓ FADING</div>'
+    +fading.slice(0,5).map(function(x){var pct=Math.round(Math.abs(x[1].raw)*100);return '<div class="freq-row"><span class="freq-code" style="color:var(--rose)">'+(x[0])+'</span><div class="freq-bar-wrap"><div class="freq-bar" style="width:'+Math.min(100,pct*2)+'%;background:var(--rose)"></div></div><span class="freq-val" style="color:var(--rose)">−'+pct+'%</span></div>';}).join('');}
+  document.getElementById('pro-momentum').innerHTML=momHtml||'<p style="font-size:12px;color:var(--muted)">All codes stable.</p>';
+
+  // Regime
+  var regime=models.regime||{shifting:false};
+  document.getElementById('pro-regime').innerHTML='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+    +'<span style="font-size:16px">'+(regime.shifting?'⚡':'✅')+'</span>'
+    +'<div><div style="font-size:12px;font-weight:700;color:'+(regime.shifting?'var(--amber)':'var(--green)')+'">'+(regime.shifting?'Pattern shift detected':'Stable pattern')+'</div>'
+    +'<div style="font-size:11px;color:var(--muted)">'+(regime.note||'')+'</div></div></div>';
+}
+
+// ── RENDER COMPARE ───────────────────────────
+function renderCompare(){
+  if(!activeShop) return;
+  db=loadDB();
+  var models=proShopModels(activeShop);
+  var notReady='<p style="font-size:12px;color:var(--muted)">Run Rebuild first.</p>';
+  if(!models){
+    ['cmp-accuracy','cmp-predictions','cmp-history','cmp-triggered','cmp-signals'].forEach(function(id){
+      document.getElementById(id).innerHTML=notReady;
+    });
+    return;
+  }
+
+  // ── Read Insight data ──
+  var iDB=null,iSh=null,iResolved=[],iTop5=[],iWeights={},iSlotCov=null,iHitRate=null;
+  try{
+    iDB=JSON.parse(localStorage.getItem('inv_intel_v4'));
+    if(iDB&&iDB.shops&&iDB.shops[activeShop]){
+      iSh=iDB.shops[activeShop];
+      var iAllPreds=(iSh.predictions||[]);
+      var iPend=iAllPreds.filter(function(p){return p.status==='pending';});
+      if(iPend.length) iTop5=iPend[0].predictedCodes||[];
+      iResolved=iAllPreds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+      var totSlots=iResolved.reduce(function(a,p){return a+(p.totalSlots||0);},0);
+      var totCov=iResolved.reduce(function(a,p){return a+(p.slotsCovered||0);},0);
+      iSlotCov=totSlots>0?Math.round(totCov/totSlots*100):null;
+      var iHT=0,iHH=0;
+      iResolved.forEach(function(p){Object.values(p.outcome).forEach(function(v){iHT++;if(v==='hit')iHH++;});});
+      iHitRate=iHT>0?Math.round(iHH/iHT*100):null;
+      iWeights=iSh.weights||{};
+    }
+  }catch(e){}
+
+  // ── ProDB data ──
+  var proTop5=models.top5||[];
+  var calib=models.calibProbs||{};
+  var wf=models.walkForward||{};
+  var kf=models.kFold||{};
+  var impData=models.permImportance&&models.permImportance.importance||{};
+  var maxImp=Math.max.apply(null,Object.values(impData).concat([0.001]));
+  var maxInsW=Math.max.apply(null,Object.values(iWeights).concat([0.001]));
+  var proPreds=proShopPreds(activeShop);
+  var proResolved=proPreds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+
+  // ── 1. ACCURACY ──
+  var pWFCol=wf.avgSlotCov>=50?'var(--green)':wf.avgSlotCov>=30?'var(--teal)':'var(--rose)';
+  var iCol=iHitRate>=50?'var(--green)':iHitRate>=30?'var(--amber)':'var(--rose)';
+  var diff=wf.avgSlotCov&&iSlotCov?wf.avgSlotCov-iSlotCov:null;
+  var diffStr=diff!==null?'<span style="font-size:11px;color:'+(diff>0?'var(--teal)':diff<0?'var(--amber)':'var(--muted)')+'">'+(diff>0?'+':'')+diff+'% vs Insight</span>':'';
+  document.getElementById('cmp-accuracy').innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+    +'<div style="text-align:center;padding:10px;background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.2);border-radius:8px">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--teal);margin-bottom:4px">INSIGHTPRO</div>'
+      +'<div style="font-size:26px;font-weight:900;font-family:var(--mono);color:'+pWFCol+'">'+avgStr(wf.avgSlotCov)+'%</div>'
+      +'<div style="font-size:10px;color:var(--muted)">walk-forward slot cov</div>'
+      +(kf.avgSlotCov?'<div style="font-size:10px;color:var(--muted)">k-fold: '+kf.avgSlotCov+'±'+kf.stdSlotCov+'%</div>':'')
+      +diffStr
+    +'</div>'
+    +'<div style="text-align:center;padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:4px">INSIGHT</div>'
+      +'<div style="font-size:26px;font-weight:900;font-family:var(--mono);color:'+iCol+'">'+(iHitRate!==null?iHitRate+'%':'—')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">code hit rate</div>'
+      +(iSlotCov!==null?'<div style="font-size:10px;color:var(--muted)">'+iSlotCov+'% slot cov</div>':'')
+    +'</div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--muted)">Pro: '+proResolved.length+' resolved · Insight: '+iResolved.length+' resolved</div>';
+
+  // ── 2. TOP-5 ──
+  var medals=['🥇','🥈','🥉','4️⃣','5️⃣'];
+  var agree=proTop5.filter(function(c){return iTop5.indexOf(c)>-1;}).length;
+  var proOnly=proTop5.filter(function(c){return iTop5.indexOf(c)===-1;});
+  var iOnly=iTop5.filter(function(c){return proTop5.indexOf(c)===-1;});
+  var agreeCol=agree>=4?'var(--green)':agree>=3?'var(--amber)':'var(--rose)';
+  var cmpHtml='<div style="display:grid;grid-template-columns:1fr 28px 1fr;gap:4px;font-size:9px;font-weight:700;color:var(--muted);padding:3px 0;border-bottom:1px solid var(--border);margin-bottom:3px">'
+    +'<span>INSIGHTPRO (prob)</span><span></span><span style="text-align:right">INSIGHT</span></div>';
+  for(var i=0;i<5;i++){
+    var pc=proTop5[i]||'—',ic=iTop5[i]||'—',match=pc===ic&&pc!=='—';
+    var prob=pc!=='—'&&calib[pc]?Math.round(calib[pc]*100)+'%':'';
+    cmpHtml+='<div style="display:grid;grid-template-columns:1fr 28px 1fr;gap:4px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
+      +'<div><span style="font-family:var(--mono);font-weight:900;font-size:14px;color:var(--teal)">'+pc+'</span>'+(prob?'<span style="font-size:10px;color:var(--muted)"> '+prob+'</span>':'')+'</div>'
+      +'<span style="text-align:center;font-weight:800;color:'+(match?'var(--green)':'var(--muted)')+'">'+( match?'✓':medals[i])+'</span>'
+      +'<div style="text-align:right"><span style="font-family:var(--mono);font-weight:900;font-size:14px;color:var(--amber)">'+ic+'</span></div>'
+      +'</div>';
+  }
+  cmpHtml+='<div style="font-size:11px;color:var(--muted);margin-top:6px">'
+    +'Agreement: <strong style="color:'+agreeCol+'">'+agree+'/5</strong>';
+  if(proOnly.length) cmpHtml+=' · Pro only: <span style="font-family:var(--mono);color:var(--teal)">'+proOnly.join(' ')+'</span>';
+  if(iOnly.length)   cmpHtml+=' · Insight only: <span style="font-family:var(--mono);color:var(--amber)">'+iOnly.join(' ')+'</span>';
+  cmpHtml+='</div>';
+  document.getElementById('cmp-predictions').innerHTML=cmpHtml;
+
+  // ── 3. PREDICTION HISTORY comparison ──
+  // Align resolved predictions by date and show Pro vs Insight outcome per refill
+  var histHtml='';
+  if(!iResolved.length||!proResolved.length){
+    histHtml='<p style="font-size:12px;color:var(--muted)">Need resolved predictions in both apps.</p>';
+  } else {
+    // Match by actualDate
+    var dateMap={};
+    iResolved.forEach(function(p){ var d=p.actualDate||p.createdDate; dateMap[d]=dateMap[d]||{}; dateMap[d].insight=p; });
+    proResolved.forEach(function(p){ var d=p.actualDate||p.createdDate; dateMap[d]=dateMap[d]||{}; dateMap[d].pro=p; });
+    var dates=Object.keys(dateMap).sort().reverse().slice(0,8);
+
+    // Column header
+    histHtml='<div style="font-size:9px;color:var(--muted);display:grid;grid-template-columns:44px 1fr 1fr;gap:6px;padding:2px 0;border-bottom:1px solid var(--border);margin-bottom:4px">'
+      +'<span>DATE</span><span style="color:var(--teal)">INSIGHTPRO</span><span style="color:var(--amber);text-align:right">INSIGHT</span></div>';
+
+    histHtml+=dates.map(function(d){
+      var entry=dateMap[d];
+      var pp=entry.pro,ip=entry.insight;
+
+      function outcomeBar(pred,col){
+        if(!pred||!pred.outcome) return '<span style="color:var(--muted);font-size:11px">—</span>';
+        var hits=Object.values(pred.outcome).filter(function(v){return v==='hit';}).length;
+        var tot=pred.predictedCodes.length;
+        var pct=Math.round(hits/tot*100);
+        var slotPct=pred.totalSlots>0?Math.round((pred.slotsCovered||0)/pred.totalSlots*100):null;
+        var barCol=pct>=60?'var(--green)':pct>=40?col:'var(--rose)';
+        var codes=pred.predictedCodes.map(function(c){
+          var out=pred.outcome[c];
+          var oc=out==='hit'?'var(--green)':out==='partial'?col:'var(--red)';
+          var icon=out==='hit'?'✓':out==='partial'?'~':'✗';
+          var maxS=Math.max.apply(null,Object.values(pred.scores||{}).concat([0.001]));
+          var sc=pred.scores&&pred.scores[c]?Math.round(pred.scores[c]/maxS*100):null;
+          return '<div style="display:flex;flex-direction:column;align-items:center;min-width:22px">'
+            +'<span style="font-family:var(--mono);font-weight:800;font-size:10px;color:'+oc+'">'+c+'</span>'
+            +'<span style="font-size:9px;color:'+oc+'">'+icon+'</span>'
+            +(sc!==null?'<div style="width:18px;height:3px;background:var(--surface2);border-radius:1px;overflow:hidden"><div style="width:'+sc+'%;height:100%;background:'+oc+'"></div></div>':'')
+            +'</div>';
+        }).join('');
+        return '<div><div style="display:flex;gap:2px;flex-wrap:wrap">'+codes+'</div>'
+          +'<div style="font-size:10px;font-family:var(--mono);font-weight:700;color:'+barCol+';margin-top:2px">'
+            +hits+'/'+tot+(slotPct!==null?' · '+slotPct+'% slot':'')
+          +'</div></div>';
+      }
+
+      var winner=pp&&ip&&pp.slotsCovered&&ip.slotsCovered
+        ?(pp.slotsCovered>ip.slotsCovered?'pro':pp.slotsCovered<ip.slotsCovered?'insight':'tie')
+        :null;
+
+      return '<div style="display:grid;grid-template-columns:44px 1fr 1fr;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);align-items:start">'
+        +'<div style="font-family:var(--mono);font-size:10px;color:var(--muted)">'+(d.slice(5))
+          +(winner?'<div style="font-size:9px;margin-top:2px;color:'+(winner==='pro'?'var(--teal)':winner==='insight'?'var(--amber)':'var(--muted)')+'">'+(winner==='pro'?'Pro ▲':winner==='insight'?'I ▲':'Tie')+'</div>':'')
+        +'</div>'
+        +outcomeBar(pp,'var(--teal)')
+        +'<div style="text-align:right">'+outcomeBar(ip,'var(--amber)')+'</div>'
+        +'</div>';
+    }).join('');
+
+    // Mini summary: who won more often
+    var proWins=0,iWins=0,ties=0;
+    dates.forEach(function(d){
+      var e=dateMap[d];
+      if(e.pro&&e.insight&&e.pro.slotsCovered!=null&&e.insight.slotsCovered!=null){
+        if(e.pro.slotsCovered>e.insight.slotsCovered) proWins++;
+        else if(e.pro.slotsCovered<e.insight.slotsCovered) iWins++;
+        else ties++;
+      }
+    });
+    if(proWins+iWins+ties>0){
+      histHtml+='<div style="font-size:11px;color:var(--muted);margin-top:6px">'
+        +'Pro ahead: <strong style="color:var(--teal)">'+proWins+'</strong> · '
+        +'Insight ahead: <strong style="color:var(--amber)">'+iWins+'</strong> · '
+        +'Tie: '+ties
+        +'</div>';
+    }
+  }
+  document.getElementById('cmp-history').innerHTML=histHtml;
+
+  // ── 4. TRIGGERED comparison ──
+  var triggHtml='';
+  var proTriggPerf=buildTriggeredPerformance(activeShop);
+  // Insight triggered (from Insight DB)
+  var iTriggTotal=0,iTriggHit=0;
+  if(iResolved.length){
+    iResolved.forEach(function(p){
+      if(!p.triggeredOutcome) return;
+      Object.values(p.triggeredOutcome).forEach(function(t){
+        iTriggTotal++;
+        if(t.appeared) iTriggHit++;
+      });
+    });
+  }
+  var proTriggRate=proTriggPerf.perType.promoted.total+proTriggPerf.perType.watchout.total>0
+    ?Math.round((proTriggPerf.perType.promoted.hit+proTriggPerf.perType.watchout.hit)/(proTriggPerf.perType.promoted.total+proTriggPerf.perType.watchout.total)*100):null;
+  var iTriggRate=iTriggTotal>0?Math.round(iTriggHit/iTriggTotal*100):null;
+
+  triggHtml='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">'
+    +'<div style="text-align:center;padding:8px;background:rgba(45,212,191,.08);border-radius:8px;border:1px solid rgba(45,212,191,.2)">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--teal);margin-bottom:3px">INSIGHTPRO</div>'
+      +'<div style="font-size:22px;font-weight:900;font-family:var(--mono);color:'+(proTriggRate>=50?'var(--green)':proTriggRate>=25?'var(--teal)':'var(--rose)')+'">'+(proTriggRate!==null?proTriggRate+'%':'—')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">triggered hit rate</div>'
+    +'</div>'
+    +'<div style="text-align:center;padding:8px;background:rgba(245,158,11,.08);border-radius:8px;border:1px solid rgba(245,158,11,.2)">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">INSIGHT</div>'
+      +'<div style="font-size:22px;font-weight:900;font-family:var(--mono);color:'+(iTriggRate>=50?'var(--green)':iTriggRate>=25?'var(--amber)':'var(--rose)')+'">'+(iTriggRate!==null?iTriggRate+'%':'—')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">triggered hit rate</div>'
+    +'</div>'
+  +'</div>';
+
+  if(proTriggPerf.perCode.length){
+    triggHtml+='<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Pro triggered codes</div>';
+    triggHtml+=proTriggPerf.perCode.slice(0,5).map(function(pc2){
+      var rCol=pc2.hitRate>=60?'var(--green)':pc2.hitRate>=30?'var(--teal)':'var(--rose)';
+      var promoB=pc2.promoted.total>0?'🔬 '+pc2.promotedRate+'% ('+pc2.promoted.total+')':'';
+      var watchB=pc2.watchout.total>0?'⚠️ '+pc2.watchoutRate+'% ('+pc2.watchout.total+')':'';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">'
+        +'<span style="font-family:var(--mono);font-weight:800;font-size:13px;color:'+rCol+'">'+pc2.code+'</span>'
+        +'<span style="font-size:11px;font-family:var(--mono);font-weight:700;color:'+rCol+'">'+pc2.hitRate+'%</span>'
+        +'<span style="font-size:10px;color:var(--muted)">'+[promoB,watchB].filter(Boolean).join(' · ')+'</span>'
+        +'</div>';
+    }).join('');
+  }
+  document.getElementById('cmp-triggered').innerHTML=triggHtml||'<p style="font-size:12px;color:var(--muted)">No triggered data yet. Run Rebuild.</p>';
+
+  // ── 5. SIGNAL COMPARISON ──
+  document.getElementById('cmp-signals').innerHTML=SIGNAL_KEYS.map(function(k){
+    var imp=impData[k]||0,iW=iWeights[k]||DEFAULT_WEIGHTS[k]||0;
+    var proBar=Math.round(imp/maxImp*100);
+    var iBar=Math.round(iW/maxInsW*100);
+    var col=SIGNAL_COLORS[k]||'var(--muted)';
+    var pPct=Math.round(imp*100),iPct=Math.round(iW*100);
+    var disagree=Math.abs(pPct-iPct)>=10;
+    return '<div class="sig-imp-row">'
+      +'<div class="sig-dot" style="background:'+col+'"></div>'
+      +'<span class="sig-name">'+(SIGNAL_NAMES[k]||k)+'</span>'
+      +'<div class="sig-bar-wrap">'
+        +'<div style="height:4px;background:var(--teal);border-radius:2px;width:'+proBar+'%;opacity:.85;margin-bottom:2px"></div>'
+        +'<div style="height:4px;background:var(--amber);border-radius:2px;width:'+iBar+'%;opacity:.7"></div>'
+      +'</div>'
+      +'<div style="font-size:9px;font-family:var(--mono);text-align:right;min-width:76px;color:'+(disagree?'var(--amber)':'var(--muted)')+'">'+pPct+'%Δ / '+iPct+'%w'+(disagree?' ↕':'')+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function avgStr(v){ return v!==null&&v!==undefined?v:'—'; }
+
+// ── RENDER TRACK ─────────────────────────────
+function renderTrack(){
+  if(!activeShop) return;
+  db=loadDB();
+  var preds=proShopPreds(activeShop);
+  var models=proShopModels(activeShop);
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  var pending=preds.filter(function(p){return p.status==='pending';});
+
+  // Performance
+  var totalP=0,totalH=0;
+  resolved.forEach(function(p){Object.values(p.outcome).forEach(function(v){totalP++;if(v==='hit')totalH++;});});
+  var pct=totalP>0?Math.round(totalH/totalP*100):0;
+  var last5=resolved.slice(-5);var l5P=0,l5H=0;
+  last5.forEach(function(p){Object.values(p.outcome).forEach(function(v){l5P++;if(v==='hit')l5H++;});});
+  var l5Pct=l5P>0?Math.round(l5H/l5P*100):null;
+  var col=pct>=60?'var(--green)':pct>=30?'var(--amber)':'var(--rose)';
+  var trendStr=l5Pct!==null&&resolved.length>5
+    ?l5Pct>pct?' <span style="color:var(--green)">↑ '+l5Pct+'% last 5</span>'
+    :l5Pct<pct?' <span style="color:var(--rose)">↓ '+l5Pct+'% last 5</span>'
+    :' <span style="color:var(--muted)">→ stable</span>':'';
+  document.getElementById('track-perf').innerHTML=
+    '<div style="display:flex;gap:16px;align-items:center;margin-bottom:8px">'
+    +'<div><div style="font-size:28px;font-weight:900;font-family:var(--mono);color:'+col+'">'+(pct)+'%</div>'
+    +'<div style="font-size:11px;color:var(--muted)">code hit rate (all '+resolved.length+' preds)'+trendStr+'</div></div>'
+    +'<div style="font-size:22px">'+resolved.map(function(p){return p.status==='hit'?'🟩':p.status==='partial'?'🟨':'🟥';}).join('')
+    +'</div></div>';
+
+  // Thresholds
+  renderProThresholds('track-thresholds');
+
+  // History
+  var proEntries=proShopEntries(activeShop);
+
+  document.getElementById('track-history').innerHTML=resolved.slice().reverse().slice(0,10).map(function(p){
+    var hits=Object.values(p.outcome).filter(function(v){return v==='hit';}).length;
+    var hitRate=Math.round(hits/p.predictedCodes.length*100);
+    var slotPct=p.totalSlots>0?Math.round((p.slotsCovered||0)/p.totalSlots*100):0;
+    var col=hitRate===100?'var(--green)':hitRate>=33?'var(--amber)':'var(--rose)';
+    var sc=p.scores||{};
+    var maxS=p.predictedCodes.reduce(function(m,c){return Math.max(m,sc[c]||0);},0.001);
+    var fullMaxS=Math.max.apply(null,Object.values(sc).concat([0.001]));
+
+    // Top-5 pills with grade
+    var pills=p.predictedCodes.map(function(c){
+      var out=p.outcome[c];
+      var outCol=out==='hit'?'var(--green)':out==='miss'?'var(--rose)':'var(--amber)';
+      var icon=out==='hit'?'✓':out==='miss'?'✗':'~';
+      var pctS=Math.round((sc[c]||0)/maxS*100);
+      var isPromoted=p.promotedCodes&&p.promotedCodes.indexOf(c)>-1;
+      var snap=p.signalSnapshot&&p.signalSnapshot[c]||{};
+      var wts=p.weightsAtTime||DEFAULT_WEIGHTS;
+      var grade=buildCodeConfidenceGrade(c,snap,wts,proEntries,proPreds,activeShop,pctS);
+      return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">'
+        +'<span style="font-family:var(--mono);font-weight:900;font-size:12px;min-width:24px;color:'+outCol+'">'+c+'</span>'
+        +(isPromoted?'<span style="font-size:9px">🔬</span>':'<span style="min-width:14px"></span>')
+        +'<span style="font-size:11px;font-weight:700;color:'+outCol+'">'+icon+'</span>'
+        +'<span style="font-size:11px;font-weight:900;font-family:var(--mono);color:'+grade.col+';min-width:22px">['+grade.grade+']</span>'
+        +'<div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">'
+          +'<div style="width:'+pctS+'%;height:100%;background:'+outCol+'"></div>'
+        +'</div>'
+        +'<span style="font-size:10px;font-family:var(--mono);color:var(--muted);min-width:30px;text-align:right">'+pctS+'%</span>'
+        +'</div>';
+    }).join('');
+
+    // Surprises
+    var surprises=Array.from(new Set((p.actualCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;})));
+    var surpriseStr=surprises.length
+      ?'<div style="font-size:10px;margin-top:3px;color:var(--sig-momentum)">+ surprise: '
+        +surprises.map(function(c){
+          var ssc=sc[c]?Math.round(sc[c]/fullMaxS*100):null;
+          return '<strong style="font-family:var(--mono)">'+c+'</strong>'+(ssc!==null?' '+ssc+'%':'');
+        }).join(' ')+'</div>'
+      :'';
+
+    // Triggered codes with grade
+    var triggStr='';
+    if(p.triggeredOutcome&&Object.keys(p.triggeredOutcome).length){
+      var lines=Object.keys(p.triggeredOutcome).map(function(c){
+        var t=p.triggeredOutcome[c];
+        var typeIcon=t.type==='promoted'?'🔬':'⚠️';
+        var tCol=t.appeared?'var(--green)':'var(--muted)';
+        var tIcon=t.appeared?'✓':'·';
+        var sp=t.scorePct!==null&&t.scorePct!==undefined?t.scorePct
+          :(sc[c]?Math.round(sc[c]/fullMaxS*100):null);
+        var barCol=t.type==='promoted'?'var(--green)':'var(--amber)';
+        var snap2=p.signalSnapshot&&p.signalSnapshot[c]||{};
+        var wts2=p.weightsAtTime||DEFAULT_WEIGHTS;
+        var grade2=buildCodeConfidenceGrade(c,snap2,wts2,proEntries,proPreds,activeShop,sp||0);
+        return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">'
+          +'<span style="font-size:10px;min-width:18px">'+typeIcon+'</span>'
+          +'<span style="font-family:var(--mono);font-weight:900;font-size:12px;min-width:24px;color:'+tCol+'">'+c+'</span>'
+          +'<span style="font-size:11px;font-weight:700;color:'+tCol+'">'+tIcon+'</span>'
+          +'<span style="font-size:11px;font-weight:900;font-family:var(--mono);color:'+grade2.col+';min-width:22px">['+grade2.grade+']</span>'
+          +'<div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">'
+            +(sp!==null?'<div style="width:'+sp+'%;height:100%;background:'+barCol+'"></div>':'')
+          +'</div>'
+          +(sp!==null?'<span style="font-size:10px;font-family:var(--mono);color:var(--muted);min-width:30px;text-align:right">'+sp+'%</span>':'<span style="min-width:30px;text-align:right;font-size:10px;color:var(--muted)">—</span>')
+          +'</div>';
+      }).join('');
+      triggStr='<div style="border-top:1px solid rgba(255,255,255,.08);margin-top:4px;padding-top:4px">'+lines+'</div>';
+    }
+
+    // Actual arrived
+    var actualUniq=Array.from(new Set(p.actualCodes||[]));
+    var actualStr=actualUniq.length
+      ?'<div style="font-size:10px;color:var(--muted);margin-top:3px">→ '
+        +actualUniq.map(function(c){
+          var wasPred=p.predictedCodes.indexOf(c)>-1;
+          return '<span style="font-family:var(--mono);font-weight:700;color:'+(wasPred?'var(--green)':'var(--sig-momentum)')+'">'+c+'</span>';
+        }).join(' ')+'</div>'
+      :'';
+
+    return '<div style="display:grid;grid-template-columns:76px 1fr 44px;gap:4px;padding:6px 0;border-bottom:1px solid var(--border);align-items:start">'
+      +'<div style="font-family:var(--mono);font-size:10px;color:var(--muted);padding-top:2px">'+(p.actualDate||p.createdDate)+'</div>'
+      +'<div>'+pills+actualStr+triggStr+surpriseStr+'</div>'
+      +'<span style="font-family:var(--mono);font-weight:800;font-size:14px;color:'+col+';text-align:right;padding-top:2px">'+hitRate+'%</span>'
+      +'</div>';
+  }).join('')||'<p style="font-size:12px;color:var(--muted)">No resolved predictions yet.</p>';
+
+  // Triggered history
+  renderProTriggeredHistory('track-triggered');
+}
+
+// ── THRESHOLDS RENDER ─────────────────────────
+function renderProThresholds(containerId){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  db=loadDB();
+  var lt=proShopThresholds(activeShop);
+  if(!lt||!lt.perCode||!Object.keys(lt.perCode).length){
+    el.innerHTML='<p style="font-size:12px;color:var(--muted)">Run Rebuild to learn thresholds from prediction history.</p>';
+    return;
+  }
+  var perCode=lt.perCode;
+  var shopLevel=lt.shopLevel;
+  var surpriseLevel=lt.surpriseLevel;
+  var models=proShopModels(activeShop);
+  var ens=models&&models.ensembleScores||{};
+  var maxEns=Math.max.apply(null,Object.values(ens).concat([0.001]));
+
+  var html='';
+  if(shopLevel||surpriseLevel){
+    html+='<div style="display:flex;gap:10px;margin-bottom:10px">';
+    if(shopLevel&&shopLevel.threshold!==null)
+      html+='<div style="flex:1;padding:8px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:8px"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">HIT THRESHOLD</div><div style="font-size:18px;font-weight:900;font-family:var(--mono);color:var(--blue)">'+shopLevel.threshold+'%+</div><div style="font-size:10px;color:var(--muted)">Overall: '+shopLevel.overallHitRate+'%</div></div>';
+    if(surpriseLevel&&surpriseLevel.threshold!==null)
+      html+='<div style="flex:1;padding:8px;background:rgba(232,121,249,.08);border:1px solid rgba(232,121,249,.2);border-radius:8px"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">SURPRISE ZONE</div><div style="font-size:18px;font-weight:900;font-family:var(--mono);color:var(--sig-momentum)">'+surpriseLevel.threshold+'%+</div><div style="font-size:10px;color:var(--muted)">Rate: '+surpriseLevel.overallSurpriseRate+'%</div></div>';
+    html+='</div>';
+  }
+  var proven=Object.entries(perCode).filter(function(x){return x[1].reliability==='proven';}).sort(function(a,b){return (perCode[b[0]].lift||0)-(perCode[a[0]].lift||0);});
+  var emerging=Object.entries(perCode).filter(function(x){return x[1].reliability==='emerging';}).sort(function(a,b){return (perCode[b[0]].lift||0)-(perCode[a[0]].lift||0);});
+  html+='<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'+(proven.length)+' proven · '+(emerging.length)+' emerging · '+(lt.codesLearned)+' total</div>';
+  html+='<div style="font-size:9px;color:var(--muted);display:grid;grid-template-columns:28px 1fr 40px 40px 40px 60px;gap:3px;padding:2px 0;border-bottom:1px solid var(--border);margin-bottom:3px"><span>CODE</span><span>BAR</span><span style="text-align:right">THR</span><span style="text-align:right">▲HIT</span><span style="text-align:right">▼HIT</span><span style="text-align:right">STATUS</span></div>';
+  proven.concat(emerging).slice(0,12).forEach(function(x){
+    var c=x[0],t=x[1];
+    var curr=ens[c]?Math.round(ens[c]/maxEns*100):null;
+    var above=curr!==null&&curr>=t.thresholdPct;
+    var relBadge=t.reliability==='proven'?'<span style="font-size:9px;background:rgba(16,185,129,.15);color:var(--green);padding:1px 5px;border-radius:6px">PROVEN</span>':'<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--amber);padding:1px 5px;border-radius:6px">EMERGING</span>';
+    var barHtml='<div style="position:relative;height:7px;background:var(--surface2);border-radius:3px">'
+      +(curr!==null?'<div style="position:absolute;left:0;top:0;width:'+curr+'%;height:100%;background:'+(above?'rgba(16,185,129,.3)':'rgba(107,114,128,.3)')+';border-radius:3px"></div>':'')+'<div style="position:absolute;left:'+t.thresholdPct+'%;top:-1px;width:2px;height:9px;background:var(--amber)"></div></div>';
+    html+='<div style="display:grid;grid-template-columns:28px 1fr 40px 40px 40px 60px;gap:3px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">'
+      +'<span style="font-family:var(--mono);font-weight:800;font-size:13px;color:'+(above?'var(--green)':'var(--muted)')+'">'+(c)+'</span>'
+      +'<div>'+(barHtml)+'</div>'
+      +'<span style="font-size:11px;font-family:var(--mono);color:var(--amber);text-align:right">'+(t.thresholdPct)+'%</span>'
+      +'<span style="font-size:11px;font-family:var(--mono);color:var(--green);text-align:right">'+(t.hitRateAbove||'—')+'%</span>'
+      +'<span style="font-size:11px;font-family:var(--mono);color:var(--rose);text-align:right">'+(t.hitRateBelow||'—')+'%</span>'
+      +relBadge+'</div>';
+  });
+  el.innerHTML=html;
+}
+
+// ── TRIGGERED HISTORY ─────────────────────────
+function renderProTriggeredHistory(containerId){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  db=loadDB();
+  var preds=proShopPreds(activeShop);
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome&&p.actualCodes&&((p.promotedCodes&&p.promotedCodes.length)||(p.watchoutCodes&&p.watchoutCodes.length));});
+  if(!resolved.length){el.innerHTML='<p style="font-size:12px;color:var(--muted)">No triggered history yet.</p>';return;}
+  var codeStats={};
+  resolved.forEach(function(p){
+    var triggered=Array.from(new Set((p.promotedCodes||[]).concat(p.watchoutCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;})));
+    var sc=p.scores||{};var maxS=Math.max.apply(null,Object.values(sc).concat([0.001]));
+    triggered.forEach(function(c){
+      if(!codeStats[c]) codeStats[c]={code:c,triggered:0,hit:0,watchout:0,promoted:0,preds:[]};
+      codeStats[c].triggered++;
+      if(p.watchoutCodes&&p.watchoutCodes.indexOf(c)>-1) codeStats[c].watchout++;
+      if(p.promotedCodes&&p.promotedCodes.indexOf(c)>-1) codeStats[c].promoted++;
+      var appeared=p.actualCodes.indexOf(c)>-1;
+      if(appeared) codeStats[c].hit++;
+      var scorePct=sc[c]?Math.round(sc[c]/maxS*100):null;
+      codeStats[c].preds.push({date:p.actualDate||p.createdDate,appeared:appeared,scorePct:scorePct,type:(p.promotedCodes&&p.promotedCodes.indexOf(c)>-1)?'promoted':'watchout'});
+    });
+  });
+  var sorted=Object.values(codeStats).sort(function(a,b){var rA=a.triggered>0?a.hit/a.triggered:0,rB=b.triggered>0?b.hit/b.triggered:0;return rB!==rA?rB-rA:b.triggered-a.triggered;});
+  var totalT=sorted.reduce(function(s,c){return s+c.triggered;},0),totalH=sorted.reduce(function(s,c){return s+c.hit;},0);
+  var ovr=totalT>0?Math.round(totalH/totalT*100):0;
+  var ovrCol=ovr>=50?'var(--green)':ovr>=25?'var(--amber)':'var(--rose)';
+  var html='<div style="display:flex;gap:12px;font-size:12px;margin-bottom:10px;padding:8px;background:var(--surface2);border-radius:8px">'
+    +'<span style="color:var(--muted)">'+(sorted.length)+' codes · '+(totalT)+' times</span>'
+    +'<span style="margin-left:auto;font-family:var(--mono);font-weight:800;color:'+ovrCol+'">'+(ovr)+'% hit rate</span></div>';
+  html+=sorted.map(function(cs){
+    var rate=cs.triggered>0?Math.round(cs.hit/cs.triggered*100):0;
+    var rc=rate>=60?'var(--green)':rate>=30?'var(--amber)':'var(--rose)';
+    var dots=cs.preds.slice().reverse().slice(0,8).map(function(pr){
+      var dc=pr.appeared?'var(--green)':'var(--rose)';
+      return '<span title="'+(pr.date)+' — '+(pr.appeared?'HIT':'MISS')+' ('+(pr.type)+')'+( pr.scorePct!==null?' · '+pr.scorePct+'%':'')+'" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:'+(pr.appeared?'rgba(16,185,129,.2)':'rgba(244,63,94,.15)')+';border:1px solid '+(dc)+';font-size:8px;margin-right:2px">'+(pr.type==='promoted'?'🔬':'⚠️')+'</span>';
+    }).join('');
+    var bars=cs.preds.slice().reverse().slice(0,8).map(function(pr){
+      var dc=pr.appeared?'var(--green)':'var(--rose)';
+      if(pr.scorePct===null) return '<div style="width:18px;margin-right:2px"></div>';
+      return '<div style="display:inline-flex;flex-direction:column;align-items:center;width:18px;margin-right:2px;gap:1px">'
+        +'<span style="font-size:8px;font-family:var(--mono);color:'+dc+';line-height:1">'+(pr.scorePct)+'</span>'
+        +'<div style="width:14px;height:3px;background:var(--surface2);border-radius:2px;overflow:hidden"><div style="width:'+(pr.scorePct)+'%;height:100%;background:'+dc+'"></div></div>'
+        +'</div>';
+    }).join('');
+    var badges=''+(cs.promoted?'<span style="font-size:9px;color:var(--green);background:rgba(16,185,129,.1);padding:1px 5px;border-radius:6px;margin-right:3px">🔬 '+cs.promoted+'×</span>':'')+( cs.watchout?'<span style="font-size:9px;color:var(--amber);background:rgba(245,158,11,.1);padding:1px 5px;border-radius:6px">⚠️ '+cs.watchout+'×</span>':'')+'';
+    return '<div style="display:grid;grid-template-columns:28px 1fr 44px 44px 44px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">'
+      +'<span style="font-family:var(--mono);font-weight:900;font-size:14px;color:'+rc+'">'+(cs.code)+'</span>'
+      +'<div><div style="display:flex;flex-wrap:wrap;margin-bottom:3px">'+(dots)+'</div><div style="display:flex;flex-wrap:wrap;margin-bottom:3px">'+(bars)+'</div><div>'+(badges)+'</div></div>'
+      +'<span style="text-align:center;font-size:12px;color:var(--muted)">'+(cs.triggered)+'</span>'
+      +'<span style="text-align:center;font-size:12px;color:var(--green)">'+(cs.hit)+'</span>'
+      +'<span style="text-align:center;font-size:12px;font-family:var(--mono);font-weight:700;color:'+rc+'">'+(rate)+'%</span>'
+      +'</div>';
+  }).join('')+'<div style="font-size:10px;color:var(--muted);margin-top:5px">🔬 promoted by pattern · ⚠️ watchout triggered</div>';
+  el.innerHTML=html;
+}
+
+// ── SHOP MANAGEMENT ──────────────────────────
+function addShop(){
+  var code=prompt('Shop code (1-3 chars):'); if(!code) return;
+  code=code.toUpperCase().slice(0,3);
+  db=loadDB();
+  if(!db.shops[code]) db.shops[code]={name:code,entries:[],predictions:[],models:null};
+  saveDB(db); activeShop=code; renderShopPills(); renderCurrentPanel();
+}
+function selectShop(code){ activeShop=code; db=loadDB(); renderShopPills(); renderCurrentPanel(); }
+function renderShopPills(){
+  db=loadDB();
+  var bar=document.getElementById('shop-bar');
+  var pills=Object.keys(db.shops).map(function(code){
+    var m=proShopModels(code);
+    var acc=m&&m.walkForward?m.walkForward.avgSlotCov:null;
+    return '<button class="shop-pill '+(code===activeShop?'active':'')+'" onclick="selectShop(\''+code+'\')">'+code+(acc!==null?' '+acc+'%':'')+'</button>';
+  }).join('');
+  bar.innerHTML='<button class="shop-pill-add" onclick="addShop()">+</button>'+pills;
+}
+
+// ── NAVIGATION ───────────────────────────────
+function showPanel(id){
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('panel-'+id).classList.add('active');
+  document.getElementById('nav-'+id).classList.add('active');
+  renderCurrentPanel();
+  if(id==='data') renderRebuildPills();
+}
+function curPanel(){ var a=document.querySelector('.nav-btn.active'); return a?a.id.replace('nav-',''):'predict'; }
+function renderCurrentPanel(){
+  var p=curPanel();
+  if(p==='predict') renderPredict();
+  else if(p==='analyze') renderAnalyze();
+  else if(p==='compare') renderCompare();
+  else if(p==='track')   renderTrack();
+}
+
+// ── INIT ─────────────────────────────────────
+document.addEventListener('DOMContentLoaded',function(){
+  db=loadDB();
+  var isPWA=navigator.standalone||window.matchMedia('(display-mode: standalone)').matches;
+  document.getElementById('pwa-indicator').innerHTML=isPWA?'<span style="color:var(--green)">✅ PWA</span>':'<span style="color:var(--amber)">⚠️ Add to Home Screen</span>';
+  document.getElementById('pro-date').value=todayStr();
+  var shops=Object.keys(db.shops);
+  if(shops.length) activeShop=shops[0];
+  renderShopPills();
+  renderRebuildPills();
+  renderCurrentPanel();
+});
+</script>
+</body>
+</html>
