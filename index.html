@@ -2657,8 +2657,12 @@ function rebuildProModels(onlyShop){
   db=loadDB();
   var targetShop=onlyShop||activeShop;
   if(!targetShop||!db.shops[targetShop]){
-    document.getElementById('rebuild-result').innerHTML='<div class="alert alert-warn">No active shop.</div>';
-    return;
+    // If called from shop pill with a valid code but activeShop not set, try first shop
+    if(!targetShop) targetShop=Object.keys(db.shops)[0]||null;
+    if(!targetShop||!db.shops[targetShop]){
+      document.getElementById('rebuild-result').innerHTML='<div class="alert alert-warn">No shop selected. Import data first.</div>';
+      return;
+    }
   }
   document.getElementById('rebuild-result').innerHTML='<div class="alert alert-info" style="display:flex;align-items:center;gap:10px">'
     +'<div style="width:16px;height:16px;border:2px solid var(--teal);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div>'
@@ -2835,8 +2839,18 @@ function importInsightData(input){
         db.shops[code].entries.sort(function(a,b){return a.date.localeCompare(b.date);});
       });
       saveDB(db);
+      // Auto-select first imported shop if none active
+      var importedShops=Object.keys(shops);
+      if(!activeShop&&importedShops.length) activeShop=importedShops[0];
+      if(activeShop&&!db.shops[activeShop]) activeShop=Object.keys(db.shops)[0]||null;
       renderShopPills();
-      document.getElementById('import-result').innerHTML='<div class="alert alert-success">Imported '+imported+' entries across '+Object.keys(shops).length+' shop(s). Run Rebuild to train models.</div>';
+      renderRebuildPills();
+      var shopCount=Object.keys(shops).length;
+      document.getElementById('import-result').innerHTML='<div class="alert alert-success">'
+        +'Imported '+imported+' entries across '+shopCount+' shop'+(shopCount>1?'s':'')+'.'
+        +(activeShop?' Shop <strong>'+activeShop+'</strong> selected.':'')
+        +' Tap <strong>Rebuild '+( activeShop?activeShop+' Only':'All Shops')+'</strong> to train models.'
+        +'</div>';
     }catch(e){document.getElementById('import-result').innerHTML='<div class="alert alert-error">Error: '+e.message+'</div>';}
   };
   reader.readAsText(file);
