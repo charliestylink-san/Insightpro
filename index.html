@@ -1790,139 +1790,243 @@ function buildPlainEnglishSummary(entries, preds, top5Codes, bcsResult, letter){
 
 
 function buildCodeConfidenceGrade(code, snap, weights, entries, preds, letter, scorePct){
-  var pts=0, maxPts=0;
   var breakdown=[];
 
-  // 1. Signal consensus (25pts)
+  // ── Compute raw component values ──
+  // 1. Signal consensus (base 25pts)
   var consensus=buildSignalConsensus(code, snap, weights, weights);
-  var consPts=Math.round(consensus.score*0.25);
-  pts+=consPts; maxPts+=25;
-  breakdown.push({label:'Signals',pts:consPts,max:25,detail:consensus.yes+'↑ '+consensus.no+'↓'});
+  var consVal=consensus.score/100; // 0–1
 
-  // 2. Hit rate at this score level — threshold (30pts)
+  // 2. Hit rate at score level — threshold (base 30pts)
   var thresh=buildScoreThreshold(code,entries,preds);
-  var threshPts=0;
+  var threshVal=0;
   if(thresh&&thresh.reliability!=='insufficient'){
-    if(scorePct>=thresh.thresholdPct){
-      // Above threshold — use the proven above-threshold hit rate
-      threshPts=Math.round((thresh.hitRateAbove||50)/100*30);
-    } else {
-      // Below threshold — use below-threshold hit rate (lower)
-      threshPts=Math.round((thresh.hitRateBelowThreshold||20)/100*30);
-    }
+    threshVal=scorePct>=(thresh.thresholdPct||50)
+      ?(thresh.hitRateAbove||50)/100
+      :(thresh.hitRateBelowThreshold||20)/100;
   } else {
-    // No threshold data — use appearance rate as proxy
     var appRate=buildAppearanceRate(entries);
-    threshPts=Math.round((appRate[code]||0)*20); // conservative
+    threshVal=(appRate[code]||0)*0.67; // conservative
   }
-  pts+=threshPts; maxPts+=30;
-  breakdown.push({label:'Score threshold',pts:threshPts,max:30,
-    detail:thresh&&thresh.reliability!=='insufficient'
-      ?(scorePct>=thresh.thresholdPct?'▲ above ('+thresh.hitRateAbove+'% hit)':'▼ below ('+( thresh.hitRateBelowThreshold||0)+'% hit)')
-      :'Threshold pending'});
 
-  // 3. Bias score — historical hit rate when predicted (25pts)
+  // 3. Bias — historical hit rate when predicted (base 25pts)
   var bias=buildBias(preds);
   var biasVal=bias[code]!==undefined?bias[code]:0.5;
-  var biasPts=Math.round(biasVal*25);
-  pts+=biasPts; maxPts+=25;
-  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome&&p.predictedCodes.indexOf(code)>-1;});
-  breakdown.push({label:'Prediction bias',pts:biasPts,max:25,
-    detail:resolved.length?Math.round(biasVal*100)+'% hit rate ('+resolved.length+' preds)':'No prediction history'});
 
-  // 4. Observation window health (15pts)
+  // 4. Observation window health (base 15pts)
   var obs=letter?(shopObs(letter)[code]||{state:'idle'}):{state:'idle'};
   var obsPenalty={idle:0,watching:30,recovering:20,confirmed:60,ambiguous:0}[obs.state]||0;
-  var obsHealth=Math.max(0,100-obsPenalty);
-  var obsPts=Math.round(obsHealth*0.15);
-  pts+=obsPts; maxPts+=15;
-  breakdown.push({label:'Obs window',pts:obsPts,max:15,
-    detail:obs.state==='idle'?'Clear':obs.state.toUpperCase()+(obs.state==='confirmed'?' (−40%)':obs.state==='watching'?' (−15%)':'')});
+  var obsVal=Math.max(0,100-obsPenalty)/100;
 
-  // 5. Momentum factor (5pts)
-  var momVal=snap.momentum||0.5;
-  var momPts=Math.round(Math.min(1,Math.max(0,momVal))*5);
-  pts+=momPts; maxPts+=5;
-  breakdown.push({label:'Momentum',pts:momPts,max:5,
+  // 5. Momentum (base 5pts)
+  var momVal=Math.min(1,Math.max(0,snap.momentum||0.5));
+
+  // ── Adaptive component weights ──
+  // Base weights (must sum to 1)
+  var w={consensus:0.25, threshold:0.30, bias:0.25, obs:0.15, momentum:0.05};
+
+  // Measure per-component lift from resolved outcomes
+  var resolvedAll=preds.filter(function(p){return p.status!=='pending'&&p.outcome&&p.signalSnapshot;});
+  if(resolvedAll.length>=5){
+    // For each resolved prediction where this code was predicted,
+    // measure how well each component value correlated with the actual hit
+    var lifts={consensus:0,threshold:0,obs:0};
+    var liftCounts={consensus:0,threshold:0,obs:0};
+
+    resolvedAll.forEach(function(p){
+      if(p.predictedCodes.indexOf(code)===-1) return;
+      var isHit=p.outcome&&p.outcome[code]==='hit'?1:0;
+      var pSnap=p.signalSnapshot&&p.signalSnapshot[code]||{};
+      var pWts=p.weightsAtTime||weights;
+
+      // Consensus lift
+      var pCons=buildSignalConsensus(code,pSnap,pWts,pWts).score/100;
+      lifts.consensus+=(isHit-0.5)*(pCons-0.5)*4;
+      liftCounts.consensus++;
+
+      // Threshold lift (did above-threshold predict hit?)
+      var pScorePct=p.scores&&p.scores[code]?p.scores[code]:50;
+      var pThresh=buildScoreThreshold(code,
+        entries.filter(function(e){return e.date<=p.createdDate;}), // training data only
+        preds.filter(function(q){return q.createdDate<p.createdDate;}));
+      if(pThresh&&pThresh.reliability!=='insufficient'){
+        var aboveT=pScorePct>=(pThresh.thresholdPct||50)?1:0;
+        lifts.threshold+=(isHit-0.5)*(aboveT-0.5)*4;
+        liftCounts.threshold++;
+      }
+
+      // Obs window lift (clear obs → hit?)
+      var pObs=p.signalSnapshot&&p.signalSnapshot[code]&&p.signalSnapshot[code].obsState||'idle';
+      var obsClean={idle:1,watching:0.4,recovering:0.5,confirmed:0,ambiguous:0.5}[pObs]||0.5;
+      lifts.obs+=(isHit-0.5)*(obsClean-0.5)*4;
+      liftCounts.obs++;
+    });
+
+    // Normalise lifts
+    var normLifts={};
+    Object.keys(lifts).forEach(function(k){
+      normLifts[k]=liftCounts[k]>0?Math.max(-1,Math.min(1,lifts[k]/liftCounts[k])):0;
+    });
+
+    // Adjust weights: positive lift boosts, negative reduces
+    var lw={
+      consensus: Math.max(0.05, w.consensus  + normLifts.consensus  * 0.15),
+      threshold: Math.max(0.05, w.threshold  + normLifts.threshold  * 0.20),
+      bias:      w.bias,   // already outcome-driven, keep stable
+      obs:       Math.max(0.02, w.obs        + normLifts.obs        * 0.10),
+      momentum:  w.momentum
+    };
+    // Blend 60% base + 40% lift-adjusted, then renormalise
+    var blended={};
+    Object.keys(w).forEach(function(k){blended[k]=0.60*w[k]+0.40*(lw[k]||w[k]);});
+    var bSum=Object.values(blended).reduce(function(a,b){return a+b;},0);
+    Object.keys(blended).forEach(function(k){w[k]=blended[k]/bSum;});
+  }
+
+  // ── Score ──
+  var pts=Math.round((
+    consVal   * w.consensus  +
+    threshVal * w.threshold  +
+    biasVal   * w.bias       +
+    obsVal    * w.obs        +
+    momVal    * w.momentum
+  ) * 100);
+  pts=Math.max(0,Math.min(100,pts));
+
+  var grade=pts>=80?'A':pts>=65?'B':pts>=50?'C':pts>=35?'D':'N';
+  var col  =pts>=80?'var(--green)':pts>=65?'var(--accent)':pts>=50?'var(--gold)':'var(--red)';
+
+  // Build breakdown for display
+  breakdown.push({label:'Signals',    pts:Math.round(consVal*w.consensus*100),   max:Math.round(w.consensus*100),  detail:consensus.yes+'↑ '+consensus.no+'↓'});
+  breakdown.push({label:'Threshold',  pts:Math.round(threshVal*w.threshold*100), max:Math.round(w.threshold*100),
+    detail:thresh&&thresh.reliability!=='insufficient'
+      ?(scorePct>=(thresh.thresholdPct||50)?'▲ above ('+thresh.hitRateAbove+'% hit)':'▼ below ('+(thresh.hitRateBelowThreshold||0)+'% hit)')
+      :'Threshold pending'});
+  breakdown.push({label:'Bias',       pts:Math.round(biasVal*w.bias*100),        max:Math.round(w.bias*100),
+    detail:resolvedAll.filter(function(p){return p.predictedCodes.indexOf(code)>-1;}).length
+      ?Math.round(biasVal*100)+'% hit rate':' No history'});
+  breakdown.push({label:'Obs window', pts:Math.round(obsVal*w.obs*100),          max:Math.round(w.obs*100),
+    detail:obs.state==='idle'?'Clear':obs.state.toUpperCase()});
+  breakdown.push({label:'Momentum',   pts:Math.round(momVal*w.momentum*100),     max:Math.round(w.momentum*100),
     detail:momVal>=0.65?'↑ Emerging':momVal<=0.35?'↓ Fading':'Stable'});
 
-  var score=maxPts>0?Math.round(pts/maxPts*100):0;
-  var grade=score>=80?'A':score>=65?'B':score>=50?'C':score>=35?'D':'N';
-  var col  =score>=80?'var(--green)':score>=65?'var(--accent)':score>=50?'var(--gold)':'var(--red)';
-
-  return {score:score,grade:grade,col:col,pts:pts,maxPts:maxPts,breakdown:breakdown,
-    consensus:consensus,obsState:obs.state};
+  var score=pts;
+  return {score:score,grade:grade,col:col,pts:score,maxPts:100,breakdown:breakdown,
+    consensus:consensus,obsState:obs.state,weights:w,adapted:resolvedAll.length>=5};
 }
 
 
 function buildRefillConfidenceScore(entries, preds, top5Codes, bcsResult, letter){
   if(!top5Codes.length) return {score:0,grade:'—',col:'var(--muted)',breakdown:[]};
 
-  var scores   = bcsResult.scores||{};
-  var snaps    = bcsResult.snapshots||{};
-  var weights  = bcsResult.weights||{};
-  var regime   = bcsResult.regime||{shifting:false};
-  var obs      = shopObs(letter)||{};
-  var breakdown=[];
-  var total=0,maxPossible=0;
+  var scores  = bcsResult.scores||{};
+  var snaps   = bcsResult.snapshots||{};
+  var weights = bcsResult.weights||{};
+  var regime  = bcsResult.regime||{shifting:false};
+  var obs     = shopObs(letter)||{};
+  var resolved= preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
 
-  // Component 1: Average signal consensus across top-5 (15 pts — prior, not outcome)
+  // ── Raw component values (0–1) ──
+  // 1. Signal consensus across top-5
   var consensusSum=0;
   top5Codes.forEach(function(c){
-    var snap=snaps[c]||{};
-    var cs=buildSignalConsensus(c,snap,weights,weights);
-    consensusSum+=cs.score;
+    var cs=buildSignalConsensus(c,snaps[c]||{},weights,weights);
+    consensusSum+=cs.score/100;
   });
-  var avgConsensus=top5Codes.length?consensusSum/top5Codes.length:50;
-  var consensusPts=Math.round(avgConsensus*0.15);
-  breakdown.push({label:'Signal consensus',pts:consensusPts,max:15,
-    detail:Math.round(avgConsensus)+'% avg across top-5'});
-  total+=consensusPts; maxPossible+=15;
+  var consVal=top5Codes.length?consensusSum/top5Codes.length:0.5;
 
-  // Component 2: Observation window health (20 pts)
-  var obsPenaltySum=0;
+  // 2. Observation window health
+  var obsPenSum=0;
   top5Codes.forEach(function(c){
-    var cobs=obs[c]||{state:'idle'};
-    var pen=cobs.state==='confirmed'?40:cobs.state==='watching'?15:cobs.state==='recovering'?20:0;
-    obsPenaltySum+=pen;
+    var st=(obs[c]||{state:'idle'}).state;
+    obsPenSum+={confirmed:40,watching:15,recovering:20,idle:0,ambiguous:0}[st]||0;
   });
-  var obsHealth=Math.max(0,100-obsPenaltySum/top5Codes.length);
-  var obsPts=Math.round(obsHealth*0.20);
-  breakdown.push({label:'Obs window health',pts:obsPts,max:20,
-    detail:Math.round(obsHealth)+'% — '+top5Codes.filter(function(c){return obs[c]&&obs[c].state!=='idle';}).length+' code(s) penalised'});
-  total+=obsPts; maxPossible+=20;
+  var obsVal=Math.max(0,1-(obsPenSum/top5Codes.length)/100);
 
-  // Component 3: Recent accuracy (45 pts — dominant: actual outcomes)
-  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  // 3. Recent accuracy (dominant — actual outcomes)
   var last5=resolved.slice(-5);
-  var trendPts=0;
+  var recentVal=0;
   if(last5.length>=3){
-    var last5H=0,last5T=0;
-    last5.forEach(function(p){
-      Object.values(p.outcome).forEach(function(v){last5T++;if(v==='hit')last5H++;});
-    });
-    var last5Rate=last5T>0?last5H/last5T:0;
-    trendPts=Math.round(last5Rate*45);
-    breakdown.push({label:'Recent accuracy',pts:trendPts,max:45,
-      detail:Math.round(last5Rate*100)+'% code hit rate (last '+last5.length+')'});
+    var h=0,t=0;
+    last5.forEach(function(p){Object.values(p.outcome).forEach(function(v){t++;if(v==='hit')h++;});});
+    recentVal=t>0?h/t:0;
   } else {
-    trendPts=15; // partial credit if no history yet
-    breakdown.push({label:'Recent accuracy',pts:trendPts,max:45,detail:'Insufficient history ('+last5.length+' preds)'});
+    recentVal=0.33; // partial credit
   }
-  total+=trendPts; maxPossible+=45;
 
-  // Component 4: Pattern stability (20 pts)
-  var regimePts=regime.shifting?Math.round((regime.overlapScore||0.5)*20):20;
-  breakdown.push({label:'Pattern stability',pts:regimePts,max:20,
-    detail:regime.shifting?'Shift detected ('+Math.round((regime.overlapScore||0)*100)+'% overlap)':'Stable'});
-  total+=regimePts; maxPossible+=20;
+  // 4. Pattern stability
+  var stabilityVal=regime.shifting?(regime.overlapScore||0.5):1.0;
 
-  var score=Math.round(total/maxPossible*100);
+  // ── Adaptive weights ──
+  // Base weights
+  var w={consensus:0.15, obs:0.20, recent:0.45, stability:0.20};
+
+  if(resolved.length>=5){
+    // Measure whether consensus and stability predicted correct refills
+    var cLift=0,sLift=0,cN=0,sN=0;
+    resolved.slice(-10).forEach(function(p){
+      var slotCov=p.totalSlots>0?(p.slotsCovered||0)/p.totalSlots:0;
+      var isGood=slotCov>=0.4?1:0; // prediction was good if ≥40% slot coverage
+
+      // Consensus lift at prediction time
+      var pCons=0;
+      (p.predictedCodes||[]).forEach(function(c){
+        var pSnap=p.signalSnapshot&&p.signalSnapshot[c]||{};
+        var pWts=p.weightsAtTime||weights;
+        pCons+=buildSignalConsensus(c,pSnap,pWts,pWts).score/100;
+      });
+      pCons=p.predictedCodes.length?pCons/p.predictedCodes.length:0.5;
+      cLift+=(isGood-0.5)*(pCons-0.5)*4; cN++;
+
+      // Stability lift: stable regime → good prediction?
+      var wasStable=p.regimeAtTime?!p.regimeAtTime.shifting:true;
+      sLift+=(isGood-0.5)*((wasStable?1:0)-0.5)*4; sN++;
+    });
+
+    var normCL=cN>0?Math.max(-1,Math.min(1,cLift/cN)):0;
+    var normSL=sN>0?Math.max(-1,Math.min(1,sLift/sN)):0;
+
+    var lw={
+      consensus: Math.max(0.05, w.consensus  + normCL * 0.10),
+      obs:       w.obs,   // already penalises confirmed-miss codes, keep stable
+      recent:    w.recent, // always dominant — don't reduce below 0.35
+      stability: Math.max(0.05, w.stability  + normSL * 0.10)
+    };
+    // Blend 60% base + 40% lift-adjusted, renormalise
+    var blended={};
+    Object.keys(w).forEach(function(k){blended[k]=0.60*w[k]+0.40*(lw[k]||w[k]);});
+    var bSum=Object.values(blended).reduce(function(a,b){return a+b;},0);
+    Object.keys(blended).forEach(function(k){w[k]=blended[k]/bSum;});
+    // Protect recent accuracy as dominant (≥0.40)
+    if(w.recent<0.40){
+      var deficit=0.40-w.recent;
+      w.recent=0.40;
+      w.consensus=Math.max(0.05,w.consensus-deficit*0.5);
+      w.stability=Math.max(0.05,w.stability-deficit*0.5);
+    }
+  }
+
+  // ── Score ──
+  var pts= consVal    * w.consensus +
+           obsVal     * w.obs       +
+           recentVal  * w.recent    +
+           stabilityVal* w.stability;
+  var score=Math.round(Math.max(0,Math.min(1,pts))*100);
+
   var grade=score>=75?'A':score>=60?'B':score>=45?'C':score>=30?'D':'N';
   var col=score>=75?'var(--green)':score>=60?'var(--accent)':score>=45?'var(--gold)':'var(--red)';
 
+  var breakdown=[
+    {label:'Signal consensus', pts:Math.round(consVal*w.consensus*100),    max:Math.round(w.consensus*100),  detail:Math.round(consVal*100)+'% avg across top-5'},
+    {label:'Obs window health',pts:Math.round(obsVal*w.obs*100),           max:Math.round(w.obs*100),        detail:Math.round(obsVal*100)+'% health'},
+    {label:'Recent accuracy',  pts:Math.round(recentVal*w.recent*100),     max:Math.round(w.recent*100),
+      detail:last5.length>=3?Math.round(recentVal*100)+'% code hit rate (last '+last5.length+')':'Insufficient history ('+last5.length+' preds)'},
+    {label:'Pattern stability',pts:Math.round(stabilityVal*w.stability*100),max:Math.round(w.stability*100),
+      detail:regime.shifting?'Shift detected ('+Math.round((regime.overlapScore||0)*100)+'% overlap)':'Stable'},
+  ];
+
   return {score:score,grade:grade,col:col,breakdown:breakdown,
-    regimeShifting:regime.shifting};
+    regimeShifting:regime.shifting,weights:w,adapted:resolved.length>=5};
 }
 
 
@@ -2402,6 +2506,85 @@ function buildTriggeredPerformance(letter){
 
 
 // ── THREE ENSEMBLE SUB-MODELS ───────────────
+
+// ── PRO CODE GRADE (outcome-adaptive) ────────
+// Uses InsightPro-native metrics. Component weights adapt from
+// resolved prediction outcomes when available (4+ resolutions).
+// Base: calibrated prob 35% · CI narrowness 25% · ensemble agreement 25% · WF accuracy 15%
+function buildProComponentLifts(preds){
+  var resolved=preds.filter(function(p){
+    return p.status!=='pending'&&p.outcome&&p.calibProbs&&p.predictedCodes;
+  });
+  if(resolved.length<4) return null;
+  var lifts={prob:0,ci:0,agreement:0},counts={prob:0,ci:0,agreement:0};
+  resolved.forEach(function(p){
+    var calib=p.calibProbs||{};
+    var msc=p.modelScores||{};
+    p.predictedCodes.forEach(function(c){
+      var isHit=p.outcome[c]==='hit'?1:0;
+      var prob=calib[c]||0;
+      lifts.prob+=(isHit-0.5)*(prob-0.5)*4; counts.prob++;
+      var agree=Object.keys(MODEL_DEFS_ORIG).filter(function(mk){
+        var sc=msc[mk]||{};
+        return Object.entries(sc).sort(function(a,b){return b[1]-a[1];}).slice(0,5).some(function(x){return x[0]===c;});
+      }).length/Math.max(1,Object.keys(MODEL_DEFS_ORIG).length);
+      lifts.agreement+=(isHit-0.5)*(agree-0.5)*4; counts.agreement++;
+    });
+  });
+  var result={};
+  Object.keys(lifts).forEach(function(k){
+    result[k]=counts[k]>0?Math.max(-1,Math.min(1,lifts[k]/counts[k])):0;
+  });
+  return result;
+}
+
+function buildProCodeGrade(code, models, preds){
+  if(!models) return {grade:'—',col:'var(--muted)',score:0,adapted:false};
+  var calib=models.calibProbs||{};
+  var ci=models.ciData||{};
+  var ms2=models.modelScores||{};
+  var wf=models.walkForward||{};
+
+  // Component values (0–1)
+  var prob    = calib[code]!=null?calib[code]:0.3;
+  var ciInfo  = ci[code]||{lo:0,hi:1};
+  var ciScore = Math.max(0,1-(ciInfo.hi-ciInfo.lo));
+  var mKeys   = Object.keys(MODEL_DEFS_ORIG);
+  var agree   = mKeys.filter(function(mk){
+    var sc=ms2[mk]||{};
+    return Object.entries(sc).sort(function(a,b){return b[1]-a[1];}).slice(0,5).some(function(x){return x[0]===code;});
+  }).length/Math.max(1,mKeys.length);
+  var wfAcc   = wf.avgSlotCov!=null?wf.avgSlotCov/100:0.35;
+
+  // Adaptive weights — base blended with outcome lift when available
+  var w={prob:0.35,ci:0.25,agreement:0.25,wf:0.15};
+  var lifts=preds?buildProComponentLifts(preds):null;
+  var adapted=false;
+  if(lifts){
+    adapted=true;
+    var lw={
+      prob:     Math.max(0.05, w.prob     + lifts.prob     * 0.20),
+      ci:       Math.max(0.05, w.ci       + (lifts.ci||0)  * 0.15),
+      agreement:Math.max(0.05, w.agreement+ lifts.agreement* 0.15),
+      wf:       w.wf
+    };
+    var ls=Object.values(lw).reduce(function(a,b){return a+b;},0);
+    Object.keys(lw).forEach(function(k){lw[k]=lw[k]/ls;});
+    Object.keys(w).forEach(function(k){w[k]=0.60*w[k]+0.40*lw[k];});
+    var ws=Object.values(w).reduce(function(a,b){return a+b;},0);
+    Object.keys(w).forEach(function(k){w[k]=w[k]/ws;});
+  }
+
+  var score=Math.round((prob*w.prob+ciScore*w.ci+agree*w.agreement+wfAcc*w.wf)*100);
+  score=Math.max(0,Math.min(100,score));
+  var grade=score>=80?'A':score>=65?'B':score>=50?'C':score>=35?'D':'N';
+  var col  =score>=80?'var(--green)':score>=65?'var(--teal)':score>=50?'var(--amber)':'var(--rose)';
+  return {grade:grade,col:col,score:score,
+    prob:Math.round(prob*100),ci:Math.round(ciScore*100),
+    agree:Math.round(agree*100),adapted:adapted,weights:w};
+}
+
+
 var MODEL_DEFS_ORIG = {
   recency: {name:'Recency',color:'var(--m-recency)',window:0.6,
     weights:{freq:0.05,recency:0.28,streak:0.15,bias:0.08,cooccur:0.05,interval:0.03,dow:0.02,cycle:0.05,overdue:0.05,qtydom:0.08,qtystreak:0.10,momentum:0.16}},
@@ -2897,6 +3080,7 @@ function renderPredict(){
       +'<span style="font-size:11px;color:var(--muted)">Refill confidence:</span>'
       +'<span style="font-size:20px;font-weight:900;font-family:var(--mono);color:'+(rcs.col||'var(--amber)')+'">'+(rcs.score||0)+'</span>'
       +'<span style="font-size:14px;font-weight:800;color:'+(rcs.col||'var(--amber)')+'">['+(rcs.grade||'—')+']</span>'
+      +(rcs.adapted?'<span style="font-size:10px;color:var(--green)">★ adapted</span>':'<span style="font-size:10px;color:var(--muted)">priors</span>')
       +'<span style="font-size:10px;color:var(--muted);margin-left:auto">walk-forward: '+avgCov+'%</span>'
       +'</div>';
   }
@@ -2918,9 +3102,9 @@ function renderPredict(){
     var stateBadge=st.state==='emerging'?'<span style="font-size:9px;color:var(--sig-momentum);background:rgba(232,121,249,.15);padding:1px 5px;border-radius:6px">↑ EMERGING</span>'
       :st.state==='fading'?'<span style="font-size:9px;color:var(--rose);background:rgba(244,63,94,.15);padding:1px 5px;border-radius:6px">↓ FADING</span>':''
     ;
-    // Grade
-    var snap=models.snapshots&&models.snapshots[code]||{};
-    var grade=buildCodeConfidenceGrade(code,snap,models.weights||DEFAULT_WEIGHTS,entries,preds,activeShop,raw);
+    // Grade from Pro-native metrics (calibrated prob, CI, ensemble agreement, WF accuracy)
+    // Weights adapt from resolved outcome history when available
+    var grade=buildProCodeGrade(code,models,preds);
     // Threshold
     var threshNote='';
     if(lt&&lt.perCode&&lt.perCode[code]){
@@ -2942,7 +3126,7 @@ function renderPredict(){
         +'</div>'
       +'</div>'
       +'<span style="font-size:12px;font-family:var(--mono);font-weight:700;color:'+col+'">'+(prob)+'%</span>'
-      +'<span style="font-size:11px;font-weight:900;font-family:var(--mono);color:'+(grade.col||'var(--muted)')+'">['+(grade.grade||'—')+']</span>'
+      +'<span style="font-size:11px;font-weight:900;font-family:var(--mono);color:'+(grade.col||'var(--muted)')+'">['+(grade.grade||'—')+']'+(grade.adapted?'<span style="font-size:7px;color:var(--green);vertical-align:super">★</span>':'')+'</span>'
       +'</div>';
   }).join('');
 
@@ -3542,24 +3726,78 @@ function renderTrack(){
   var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
   var pending=preds.filter(function(p){return p.status==='pending';});
 
-  // Performance
+  // ── Performance + rolling trend chart ──
   var totalP=0,totalH=0;
   resolved.forEach(function(p){Object.values(p.outcome).forEach(function(v){totalP++;if(v==='hit')totalH++;});});
   var pct=totalP>0?Math.round(totalH/totalP*100):0;
-  var last5=resolved.slice(-5);var l5P=0,l5H=0;
-  last5.forEach(function(p){Object.values(p.outcome).forEach(function(v){l5P++;if(v==='hit')l5H++;});});
-  var l5Pct=l5P>0?Math.round(l5H/l5P*100):null;
   var col=pct>=60?'var(--green)':pct>=30?'var(--amber)':'var(--rose)';
-  var trendStr=l5Pct!==null&&resolved.length>5
-    ?l5Pct>pct?' <span style="color:var(--green)">↑ '+l5Pct+'% last 5</span>'
-    :l5Pct<pct?' <span style="color:var(--rose)">↓ '+l5Pct+'% last 5</span>'
-    :' <span style="color:var(--muted)">→ stable</span>':'';
+
+  // Last-5 vs prior-5
+  var last5=resolved.slice(-5), prior5=resolved.slice(-10,-5);
+  function bRate(batch){
+    var h=0,t=0;
+    batch.forEach(function(p){Object.values(p.outcome).forEach(function(v){t++;if(v==='hit')h++;});});
+    return t>0?Math.round(h/t*100):null;
+  }
+  var l5Rate=bRate(last5), p5Rate=bRate(prior5);
+  var delta=l5Rate!==null&&p5Rate!==null?l5Rate-p5Rate:null;
+  var trendBadge='';
+  if(delta!==null){
+    var tCol=delta>3?'var(--green)':delta<-3?'var(--rose)':'var(--muted)';
+    trendBadge='<span style="font-size:11px;font-weight:700;color:'+tCol+';margin-left:6px">'
+      +(delta>0?'↑':'↓')+' '+(delta>0?'+':'')+delta+'% vs prior 5</span>';
+  }
+
+  // Rolling accuracy bar chart (last 20 predictions)
+  var chartBars=resolved.slice(-20).map(function(p){
+    var h=Object.values(p.outcome).filter(function(v){return v==='hit';}).length;
+    var r=Math.round(h/p.predictedCodes.length*100);
+    var bCol=r===100?'var(--green)':r>=60?'var(--teal)':r>=33?'var(--amber)':'var(--rose)';
+    var barH=Math.max(4,Math.round(r*0.44));
+    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:10px">'
+      +'<div style="font-size:7px;color:'+bCol+';margin-bottom:1px">'+r+'%</div>'
+      +'<div style="width:100%;background:'+bCol+';border-radius:2px 2px 0 0;height:'+barH+'px;opacity:.85"></div>'
+      +'</div>';
+  }).join('');
+
+  // 5-pred moving average dots
+  var maLine='';
+  if(resolved.length>=5){
+    var resl20=resolved.slice(-20);
+    var dots=resl20.map(function(_,i,arr){
+      var win=arr.slice(Math.max(0,i-4),i+1);
+      var h2=0,t2=0; win.forEach(function(p){Object.values(p.outcome).forEach(function(v){t2++;if(v==='hit')h2++;});});
+      return t2>0?Math.round(h2/t2*100):null;
+    });
+    maLine='<div style="position:absolute;bottom:0;left:0;right:0;height:44px;pointer-events:none">'
+      +dots.map(function(v,i){
+        if(v===null) return '';
+        var x=Math.round((i+0.5)/dots.length*100);
+        var y=44-Math.round(v*0.44);
+        return '<div style="position:absolute;left:'+x+'%;top:'+y+'px;width:4px;height:4px;border-radius:50%;background:var(--teal);transform:translate(-50%,-50%)"></div>';
+      }).join('')+'</div>';
+  }
+
   document.getElementById('track-perf').innerHTML=
-    '<div style="display:flex;gap:16px;align-items:center;margin-bottom:8px">'
-    +'<div><div style="font-size:28px;font-weight:900;font-family:var(--mono);color:'+col+'">'+(pct)+'%</div>'
-    +'<div style="font-size:11px;color:var(--muted)">code hit rate (all '+resolved.length+' preds)'+trendStr+'</div></div>'
-    +'<div style="font-size:22px">'+resolved.map(function(p){return p.status==='hit'?'🟩':p.status==='partial'?'🟨':'🟥';}).join('')
-    +'</div></div>';
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'
+      +'<span style="font-size:26px;font-weight:900;font-family:var(--mono);color:'+col+'">'+pct+'%</span>'
+      +'<div>'
+        +'<div style="font-size:11px;color:var(--muted)">code hit rate · '+resolved.length+' predictions</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'
+          +(l5Rate!==null?'last 5: <strong style="color:'+(l5Rate>=pct?'var(--green)':'var(--rose)')+'">'+l5Rate+'%</strong>':'')
+          +(p5Rate!==null?' · prior 5: <strong style="color:var(--muted)">'+p5Rate+'%</strong>':'')
+          +trendBadge
+        +'</div>'
+      +'</div>'
+    +'</div>'
+    +(resolved.length>=3
+      ?'<div style="font-size:10px;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Accuracy trend · ● 5-pred moving avg</div>'
+        +'<div style="position:relative">'
+          +'<div style="display:flex;align-items:flex-end;gap:2px;height:44px;background:var(--surface2);border-radius:4px;padding:0 2px">'+chartBars+'</div>'
+          +maLine
+        +'</div>'
+      :'')
+    +'<div style="font-size:12px;margin-top:6px">'+resolved.map(function(p){return p.status==='hit'?'🟩':p.status==='partial'?'🟨':'🟥';}).join('')+'</div>';
 
   // Thresholds
   renderProThresholds('track-thresholds');
