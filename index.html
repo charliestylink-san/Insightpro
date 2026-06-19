@@ -2614,19 +2614,6 @@ function fitPlattParams(preds,scores){
 }
 
 // ── BOOTSTRAP CI ────────────────────────────
-function bootstrapCI(entries,code,nBoots){
-  nBoots=nBoots||60;
-  var boots=[];
-  for(var b=0;b<nBoots;b++){
-    var sample=[];
-    for(var i=0;i<entries.length;i++) sample.push(entries[Math.floor(Math.random()*entries.length)]);
-    var res=buildEnsembleScores(sample,null);
-    var top5=Object.entries(res.ensemble).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
-    boots.push(top5.indexOf(code)>-1?1:0);
-  }
-  boots.sort(function(a,b){return a-b;});
-  return {prob:mean(boots),lo:boots[Math.floor(nBoots*0.05)],hi:boots[Math.floor(nBoots*0.95)]};
-}
 
 // ── REBUILD ML MODELS ────────────────────────
 function renderRebuildPills(){
@@ -2685,15 +2672,11 @@ function rebuildProModels(onlyShop){
     var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
     var preds=proShopPreds(targetShop);
 
-    // ── CORE: Single ensemble scoring (fast) ──
+    // ── PHASE 1: Core ensemble only (fast, no CI) ──
     var ensResult=buildEnsembleScores(sorted,null);
     var top5=Object.entries(ensResult.ensemble).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
     var calibParams=fitPlattParams(preds,ensResult.ensemble);
     var calibProbs=plattScale(ensResult.ensemble,calibParams);
-
-    // Bootstrap CI — 20 boots, only for top-5 codes
-    var ciData={};
-    top5.forEach(function(x){ciData[x[0]]=bootstrapCI(sorted,x[0],20);});
 
     var regime=detectRegimeShift(sorted);
     var codeStates=classifyCodeStates(sorted);
@@ -2711,28 +2694,33 @@ function rebuildProModels(onlyShop){
     var similarity=buildHistoricalSimilarity(sorted,3);
     var rcs=buildRefillConfidenceScore(sorted,preds,top5Codes,bcsResult,targetShop);
 
-    // Store models — walk-forward/kfold/permImportance computed lazily in renderAnalyze
+    // Store models — CI/WF/perm computed lazily
     db.shops[targetShop].models={
-      walkForward:null,      // computed lazily
-      kFold:null,            // computed lazily
-      permImportance:null,   // computed lazily
+      walkForward:null,permImportance:null,kFold:null,
+      ciData:{}, // filled in phase 2
       ensembleScores:ensScores,modelScores:ensResult.modelScores,
-      calibParams:calibParams,calibProbs:calibProbs,ciData:ciData,
+      calibParams:calibParams,calibProbs:calibProbs,
       regime:regime,codeStates:codeStates,
       momentum:momResult,patterns:patterns,cooccur:cooccur,
       similarity:similarity,watchouts:watchouts,
-      summary:summary,rcs:rcs,
-      snapshots:snapshots,weights:weights,
+      summary:summary,rcs:rcs,snapshots:snapshots,weights:weights,
       top5:top5Codes,builtAt:new Date().toISOString()
     };
-    db.shops[targetShop].lastFullScores=ensScores;
 
-    // Auto-generate pending prediction
+    // Normalise full scores to 0-100 for stable display
+    var fullMax=Math.max.apply(null,Object.values(ensScores).concat([0.001]));
+    var normFull={};
+    Object.keys(ensScores).forEach(function(c){normFull[c]=Math.round(ensScores[c]/fullMax*100);});
+    db.shops[targetShop].lastFullScores=normFull;
+
+    // Pending prediction
     db.shops[targetShop].predictions=db.shops[targetShop].predictions||[];
     db.shops[targetShop].predictions.forEach(function(p){if(p.status==='pending') p.status='expired';});
+    var top5Max=top5.length?top5[0][1]:0.001;
     db.shops[targetShop].predictions.push({
       id:Date.now(),createdDate:sorted[sorted.length-1].date,
-      predictedCodes:top5Codes,scores:(function(){var _mx=Math.max.apply(null,Object.values(ensScores).concat([0.001]));var _ns={};Object.keys(ensScores).forEach(function(c){_ns[c]=Math.round(ensScores[c]/_mx*100);});return _ns;})(),
+      predictedCodes:top5Codes,
+      scores:top5.reduce(function(o,x){o[x[0]]=Math.round(x[1]/top5Max*100);return o;},{}),
       calibProbs:calibProbs,modelScores:ensResult.modelScores,
       signalSnapshot:snapshots,weightsAtTime:weights,
       watchoutCodes:watchouts.map(function(w){return w.code;}),
@@ -2744,13 +2732,29 @@ function rebuildProModels(onlyShop){
     saveDB(db);
     learnAndStoreThresholds(targetShop);
 
-    document.getElementById('rebuild-result').innerHTML='<div class="alert alert-success">✅ '+targetShop+' models trained. Open Analyze tab to run full validation.</div>';
-    if(navigator.vibrate) navigator.vibrate([30,20,30,20,80]);
+    document.getElementById('rebuild-result').innerHTML='<div class="alert alert-success" style="display:flex;align-items:center;gap:8px">'
+      +'<span>✅ '+targetShop+' ready — computing CI…</span>'
+      +'<div style="width:12px;height:12px;border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0"></div>'
+      +'</div>';
     renderShopPills();
     renderRebuildPills();
     if(curPanel()==='predict') renderPredict();
-    if(curPanel()==='analyze') renderAnalyze();
     if(curPanel()==='track')   renderTrack();
+
+    // ── PHASE 2: Bootstrap CI (deferred — 20 boots × 5 codes) ──
+    setTimeout(function(){
+      db=loadDB();
+      var m=proShopModels(targetShop);
+      if(!m) return;
+      var ciData={};
+      top5.forEach(function(x){ciData[x[0]]=bootstrapCI(sorted,x[0],20);});
+      m.ciData=ciData;
+      db.shops[targetShop].models=m;
+      saveDB(db);
+      if(navigator.vibrate) navigator.vibrate([30,20,30,20,80]);
+      document.getElementById('rebuild-result').innerHTML='<div class="alert alert-success">✅ '+targetShop+' fully trained. Open Analyze for walk-forward &amp; signal importance.</div>';
+      if(curPanel()==='predict') renderPredict();
+    },50);
 
   },50);
 }
