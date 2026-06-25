@@ -4550,6 +4550,22 @@ function renderTrackScore(){
     var top5Codes=frozenPred.predictedCodes||
       Object.entries(predScores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
     var fullMax=Math.max.apply(null,Object.values(predScores).concat([0.001]));
+    // Sort by grade then combinedPct — matches PREDICT display order
+    var gradeOrder={A:0,B:1,C:2,D:3,N:4};
+    top5Codes=top5Codes.slice().sort(function(a,b){
+      var aPct=Math.round((predScores[a]||0)/fullMax*100);
+      var bPct=Math.round((predScores[b]||0)/fullMax*100);
+      var aGrade=buildCodeConfidenceGrade(a,snapByCode[a]||{},weights,entries,preds,activeShop,aPct);
+      var bGrade=buildCodeConfidenceGrade(b,snapByCode[b]||{},weights,entries,preds,activeShop,bPct);
+      var aOrder=gradeOrder[aGrade.grade]!==undefined?gradeOrder[aGrade.grade]:5;
+      var bOrder=gradeOrder[bGrade.grade]!==undefined?gradeOrder[bGrade.grade]:5;
+      if(aOrder!==bOrder) return aOrder-bOrder;
+      var aHR=buildCodeHitRate(a,preds);
+      var bHR=buildCodeHitRate(b,preds);
+      var aCombined=aHR?Math.round(aPct*0.5+aHR.rate*0.5):aPct;
+      var bCombined=bHR?Math.round(bPct*0.5+bHR.rate*0.5):bPct;
+      return bCombined-aCombined;
+    });
     html+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Frozen prediction grades</div>';
     html+=top5Codes.map(function(c){
       var pct=Math.round((predScores[c]||0)/fullMax*100);
