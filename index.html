@@ -1929,8 +1929,9 @@ threshVal=(appRate[code]||0)*0.67;
 var bias=buildBias(preds);
 var biasVal=bias[code]!==undefined?bias[code]:0.5;
 var obs=letter?(shopObs(letter)[code]||{state:'idle'}):{state:'idle'};
-var obsPenalty={idle:0,watching:30,recovering:20,confirmed:60,ambiguous:0}[obs.state]||0;
-var obsVal=Math.max(0,100-obsPenalty)/100;
+// New directional obs: confirmed/watching = hits (boost grade), overdue = misses (reduce grade)
+var obsPenalty={idle:0,watching:-10,recovering:0,confirmed:-20,overdue:25,ambiguous:0}[obs.state]||0;
+var obsVal=Math.max(0,Math.min(130,100-obsPenalty))/100;
 var momVal=Math.min(1,Math.max(0,snap.momentum||0.5));
 var w={consensus:0.25, threshold:0.30, bias:0.25, obs:0.15, momentum:0.05};
 var resolvedAll=preds.filter(function(p){
@@ -2029,7 +2030,7 @@ var consVal=top5Codes.length?consensusSum/top5Codes.length:0.5;
 var obsPenSum=0;
 top5Codes.forEach(function(c){
 var st=(obs[c]||{state:'idle'}).state;
-obsPenSum+={confirmed:40,watching:15,recovering:20,idle:0,ambiguous:0}[st]||0;
+obsPenSum+={confirmed:-20,watching:-10,recovering:0,idle:0,overdue:25,ambiguous:0}[st]||0;
 });
 var obsVal=Math.max(0,1-(obsPenSum/top5Codes.length)/100);
 var last5=resolved.slice(-5);
@@ -2516,15 +2517,21 @@ var TEST_N=btLearned?btLearned.detail.length:resolved.length;
 var currentHits=btCurrent?Math.round(btCurrent.hitRate*TEST_N/100):0;
 var learnedHits=btLearned?Math.round(btLearned.hitRate*TEST_N/100):0;
 var hitGain=learnedHits-currentHits;
-// Accumulate snapshot
+// Accumulate snapshot — weighted by current regime
+var regimeCurrent=detectRegimeShift(sorted);
+var snapRegimeW=regimeCurrent.shifting?0.6:1.0; // stable predictions count more
 var snaps=db.shops[letter].learnerSnapshots||[];
 snaps.push({ts:Date.now(),learnedW:learnedW,hitGain:hitGain,
-  currentHits:currentHits,learnedHits:learnedHits,testN:TEST_N});
+  currentHits:currentHits,learnedHits:learnedHits,testN:TEST_N,
+  regimeW:snapRegimeW,shifting:regimeCurrent.shifting});
 if(snaps.length>10) snaps=snaps.slice(-10);
 db.shops[letter].learnerSnapshots=snaps;
-// Q4: Classify \u2014 autopilot vs alert
+// Q4: Classify — consistency weighted by regime
 var positiveSnaps=snaps.filter(function(s){return s.hitGain>0;});
-var consistency=snaps.length>0?positiveSnaps.length/snaps.length:0;
+// Weighted consistency: stable snaps count more
+var weightedPositive=snaps.reduce(function(acc,s){return acc+(s.hitGain>0?(s.regimeW||1.0):0);},0);
+var weightedTotal=snaps.reduce(function(acc,s){return acc+(s.regimeW||1.0);},0);
+var consistency=weightedTotal>0?weightedPositive/weightedTotal:0;
 var consistent=consistency>=0.6&&snaps.length>=2;
 var meaningful=hitGain>=1&&TEST_N>0&&hitGain/TEST_N>=0.15;
 // Magnitude of weight change
@@ -2871,13 +2878,14 @@ db=loadDB();
 if(!resolvedPred||!resolvedPred.outcome) return {decisions:[], gradDecisions:[]};
 var obs   = shopObs(letter);
 var grad  = shopGrad(letter);
-var snap  = resolvedPred.signalSnapshot||{};
+// Use frozenSnapshots if available, fall back to signalSnapshot
+var isCompact=!!(resolvedPred.frozenSnapshots&&resolvedPred.modelVersion);
+var rawSnap=getSnapshotForPred(resolvedPred);
+var decompSnap=decompressSnap(rawSnap,isCompact);
 var wAtTime = resolvedPred.weightsAtTime||{};
 var decisions = [];
-var sigLabels = {freq:'Frequency',recency:'Recency',streak:'Streak',
-bias:'Pred. accuracy',cooccur:'Co-occurrence',interval:'Interval',
-dow:'Day-of-week',cycle:'Cycle',overdue:'Overdue',
-qtydom:'Qty dominance',qtystreak:'Qty streak'};
+var regimeShifting=resolvedPred.regimeAtTime&&resolvedPred.regimeAtTime.shifting;
+
 resolvedPred.predictedCodes.forEach(function(code){
 var outcome = resolvedPred.outcome[code];
 var isMiss  = outcome==='miss';
@@ -2887,68 +2895,68 @@ var cobs = obs[code];
 cobs.history.push(outcome);
 if(cobs.history.length>5) cobs.history.shift();
 var prevState = cobs.state;
-if(isMiss){
-cobs.consecMisses++;
-cobs.consecHits=0;
-if(cobs.state==='idle'&&cobs.consecMisses===1){
-cobs.state='watching';
-cobs.penaltyApplied=OBS_SOFT_PENALTY;
-decisions.push({code:code,action:'watching',
-message:'1st miss \u2014 watching. Soft penalty ('+Math.round((1-OBS_SOFT_PENALTY)*100)+'%) held in reserve until confirmed.',
-severity:'info', prevState:prevState, newState:'watching'});
-} else if(cobs.state==='watching'&&cobs.consecMisses>=OBS_MIN_N){
-cobs.state='confirmed';
-cobs.penaltyApplied=OBS_HARD_PENALTY;
-cobs.confirmedAt=resolvedPred.actualDate;
-var topSig=SIGNAL_KEYS.map(function(k){
-return {k:k,c:(snap[code]&&snap[code][k]||0)*(wAtTime[k]||0)};
-}).sort(function(a,b){return b.c-a.c;})[0];
-cobs.confirmedSignal=topSig?topSig.k:null;
-decisions.push({code:code,action:'confirmed',
-message:cobs.consecMisses+' consecutive misses confirmed. Hard penalty applied ('+Math.round((1-OBS_HARD_PENALTY)*100)+'%). '
-+(topSig?sigLabels[topSig.k]+' signal flagged as counter-predictive for this code.':''),
-severity:'danger', prevState:prevState, newState:'confirmed',
-signal:topSig?topSig.k:null});
-} else if(cobs.state==='confirmed'){
-cobs.penaltyApplied=OBS_HARD_PENALTY;
-decisions.push({code:code,action:'confirmed_ongoing',
-message:'Miss #'+cobs.consecMisses+' \u2014 still confirmed. Penalty maintained.',
-severity:'danger', prevState:prevState, newState:'confirmed'});
-} else if(cobs.state==='recovering'){
-cobs.state='watching';
-cobs.consecHits=0;
-cobs.penaltyApplied=OBS_SOFT_PENALTY;
-decisions.push({code:code,action:'relapsed',
-message:'Missed again after partial recovery. Back to watching.',
-severity:'warning', prevState:prevState, newState:'watching'});
-}
+
+if(isHit){
+  // Hits build confidence: idle→watching→confirmed
+  cobs.consecHits++;
+  cobs.consecMisses=0;
+  if(cobs.state==='idle'&&cobs.consecHits===1){
+    cobs.state='watching';
+    cobs.penaltyApplied=1.0; // neutral — watching
+    decisions.push({code:code,action:'watching',
+    message:'Appeared after prediction — watching. '
+      +(regimeShifting?'Regime shift: this hit supports new pattern.':''),
+    severity:'info',prevState:prevState,newState:'watching'});
+  } else if((cobs.state==='watching'||cobs.state==='recovering')&&cobs.consecHits>=2){
+    cobs.state='confirmed';
+    // CONFIRMED = boost: code is reliably appearing after prediction
+    // Stronger boost during regime shift (evidence new pattern is real)
+    cobs.penaltyApplied=regimeShifting?1.25:1.15;
+    decisions.push({code:code,action:'confirmed',
+    message:cobs.consecHits+' consecutive hits — pattern confirmed. Score boosted '
+      +(regimeShifting?'(regime shift: +25%)':'(+15%)'),
+    severity:'positive',prevState:prevState,newState:'confirmed'});
+  } else if(cobs.state==='confirmed'){
+    cobs.penaltyApplied=regimeShifting?1.25:1.15; // maintain boost
+  } else if(cobs.state==='overdue'&&cobs.consecHits>=1){
+    cobs.state='recovering';
+    cobs.penaltyApplied=1.0;
+    decisions.push({code:code,action:'recovering',
+    message:'Code returned after absence. Recovering — penalty lifted.',
+    severity:'warning',prevState:prevState,newState:'recovering'});
+  }
 } else {
-cobs.consecHits++;
-cobs.consecMisses=0;
-if(cobs.state==='confirmed'&&cobs.consecHits===1){
-cobs.state='recovering';
-cobs.penaltyApplied=Math.max(OBS_SOFT_PENALTY, 1.0-(1.0-OBS_HARD_PENALTY)*0.5);
-decisions.push({code:code,action:'recovering',
-message:'Code returned after confirmed absence. Recovery phase started. '
-+'Need '+( OBS_RECOVER_HITS-1)+' more hit'+(OBS_RECOVER_HITS>2?'s':'')+' to fully restore.',
-severity:'warning', prevState:prevState, newState:'recovering'});
-} else if(cobs.state==='recovering'&&cobs.consecHits>=OBS_RECOVER_HITS){
-cobs.state='idle';
-cobs.penaltyApplied=1.0;
-cobs.confirmedSignal=null;
-decisions.push({code:code,action:'recovered',
-message:'Code '+code+' fully recovered. Penalty removed. Window reset.',
-severity:'positive', prevState:prevState, newState:'idle'});
-} else if(cobs.state==='watching'&&cobs.consecHits>=1){
-cobs.state='idle';
-cobs.consecMisses=0;
-cobs.penaltyApplied=1.0;
-decisions.push({code:code,action:'cleared',
-message:'Code appeared \u2014 single miss cleared. Window reset.',
-severity:'positive', prevState:prevState, newState:'idle'});
-}
+  // Misses build overdue state
+  cobs.consecMisses++;
+  cobs.consecHits=0;
+  if(cobs.state==='confirmed'){
+    cobs.state='watching'; // one miss breaks confirmation
+    cobs.penaltyApplied=1.0;
+    decisions.push({code:code,action:'conf_broken',
+    message:'Missed after confirmation — reset to watching.',
+    severity:'warning',prevState:prevState,newState:'watching'});
+  } else if(cobs.state==='idle'||cobs.state==='watching'){
+    if(cobs.consecMisses>=OBS_MIN_N){
+      cobs.state='overdue';
+      cobs.penaltyApplied=OBS_SOFT_PENALTY; // mild penalty — overdue codes
+      decisions.push({code:code,action:'overdue',
+      message:cobs.consecMisses+' consecutive misses — marked overdue. Mild penalty applied.',
+      severity:'danger',prevState:prevState,newState:'overdue'});
+    }
+  } else if(cobs.state==='overdue'){
+    if(cobs.consecMisses>=OBS_MAX_N){
+      cobs.penaltyApplied=OBS_HARD_PENALTY; // escalate after many misses
+    }
+  } else if(cobs.state==='recovering'){
+    cobs.state='watching';
+    cobs.penaltyApplied=1.0;
+    decisions.push({code:code,action:'relapsed',
+    message:'Missed again after recovery — back to watching.',
+    severity:'warning',prevState:prevState,newState:'watching'});
+  }
 }
 });
+
 var gradDecisions = [];
 var wCurrent = getWeights(letter);
 var wBefore  = Object.assign({},wCurrent);
@@ -2957,9 +2965,12 @@ SIGNAL_KEYS.forEach(function(k){
 if(!grad[k]) grad[k]=[];
 var totalGrad=0;
 resolvedPred.predictedCodes.forEach(function(code){
-var sigVal=(snap[code]&&snap[code][k])||0;
+var snap=decompSnap[code]||{};
+var sigVal=(snap[k])||0;
 var isHit=resolvedPred.outcome[code]==='hit'?1:0;
-totalGrad += LEARNING_RATE*(isHit-0.5)*sigVal;
+// Regime weighting in gradient — stable predictions drive learning more
+var rw=regimeShifting?0.6:1.0;
+totalGrad += LEARNING_RATE*(isHit-0.5)*sigVal*rw;
 });
 grad[k].push({val:totalGrad, date:resolvedPred.actualDate||resolvedPred.createdDate});
 if(grad[k].length>GRAD_MIN_N) grad[k].shift();
@@ -2971,20 +2982,11 @@ var direction = positives>=GRAD_MIN_N?1:-1;
 var avgGrad   = grad[k].reduce(function(a,g){return a+g.val;},0)/grad[k].length;
 wCurrent[k]   = (wCurrent[k]||DEFAULT_WEIGHTS[k])+avgGrad;
 changed       = true;
-gradDecisions.push({signal:k,label:sigLabels[k],
-direction:direction>0?'up':'down',
-gradients:grad[k].map(function(g){return g.val>0?'+':'\u2212';}),
+gradDecisions.push({signal:k,direction:direction>0?'up':'down',
 delta:Math.round(avgGrad*100*10)/10,
 from:Math.round(wBefore[k]*100),
-to:Math.round(wCurrent[k]*100),
-reason:direction>0?'Consistently drove correct predictions':'Consistently drove missed predictions'
-});
+to:Math.round(wCurrent[k]*100)});
 grad[k]=[];
-} else {
-gradDecisions.push({signal:k,label:sigLabels[k],
-direction:'mixed', gradients:grad[k].map(function(g){return g.val>0?'+':'\u2212';}),
-reason:'Mixed signal \u2014 gradients disagree. Not applied (noise protection).',
-delta:0});
 }
 }
 });
@@ -4928,26 +4930,37 @@ function renderBestPredList(){
 }
 
 function backtestWeights(letter, weights, fromDate){
-  // Score each refill from fromDate onward using given weights
-  // Recent refills weighted more — exponential decay of 0.92 per step back
+  // Two-dimensional weighting: recency (0.92 decay) × regime (stable=1.0, shift=0.6)
   db=loadDB();
   var entries=shopEntries(letter).slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var preds=shopPreds(letter);
   var fromIdx=entries.findIndex(function(e){return e.date>fromDate;});
   if(fromIdx<3) return null;
   var hits=0,total=0,weightedHits=0,weightedTotal=0,detail=[];
-  var n=entries.length-1-fromIdx; // total steps
   for(var i=fromIdx;i<entries.length-1;i++){
     var trainEntries=entries.slice(0,i);
     var actual=entries[i].codes;
     var scores=buildWeightedScoreDirect(trainEntries, weights);
     var top5=Object.entries(scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
     var h=top5.filter(function(c){return actual.indexOf(c)>-1;}).length;
-    // Recency weight: most recent step = 1.0, each step back decays by 0.92
+    // Recency weight
     var stepsFromEnd=entries.length-2-i;
-    var rw=Math.pow(0.92, stepsFromEnd);
+    var recencyW=Math.pow(0.92, stepsFromEnd);
+    // Regime weight: find prediction made at this entry
+    var entryDate=entries[i].date;
+    var prevDate=i>0?entries[i-1].date:'';
+    var predAtDate=preds.filter(function(p){
+      var d=p.actualDate||p.createdDate;
+      return d===entryDate||d===prevDate;
+    })[0];
+    var regimeW=predAtDate&&predAtDate.regimeAtTime
+      ?(predAtDate.regimeAtTime.shifting?0.6:1.0)
+      :0.8;
+    var rw=recencyW*regimeW;
     hits+=h; total+=top5.length;
     weightedHits+=h*rw; weightedTotal+=top5.length*rw;
-    detail.push({date:entries[i].date,hits:h,total:top5.length,rw:Math.round(rw*100)/100});
+    detail.push({date:entryDate,hits:h,total:top5.length,rw:Math.round(rw*100)/100,
+      regime:regimeW===1.0?'stable':regimeW===0.6?'shift':'unknown'});
   }
   var hitRate=total?Math.round(hits/total*100):0;
   var weightedRate=weightedTotal>0?Math.round(weightedHits/weightedTotal*100):hitRate;
@@ -5280,12 +5293,13 @@ if(Object.keys(cs).length)compactSnaps[c]=cs;
 });
 var predId=Date.now();
 saveSnapshot(predId,compactSnaps);
+var regimeNow=detectRegimeShift(allEntries);
 db.shops[letter].predictions.push({
 id:predId,createdDate:allEntries[allEntries.length-1].date,
 modelVersion:SIGNAL_VERSION,
 predictedCodes:finalTop5.map(function(x){return x[0];}),
 promotedCodes:[],patternRules:[],watchoutCodes:[],
-regimeAtTime:null,
+regimeAtTime:{shifting:regimeNow.shifting,overlapScore:regimeNow.overlapScore,note:regimeNow.note||''},
 scores:finalTop5.reduce(function(o,x){o[x[0]]=Math.round(x[1]/fMax*100);return o;},{}),
 frozenScores:fNorm,
 frozenSnapshots:compactSnaps,
@@ -5334,12 +5348,13 @@ var normScores={};
 Object.keys(result.scores).forEach(function(c){normScores[c]=Math.round(result.scores[c]/fullMax*100);});
 var predId2=Date.now();
 saveSnapshot(predId2,compactSnaps2);
+var regimeNow2=detectRegimeShift(trainEntries);
 var pred={
 id:predId2,createdDate:trainEntries[trainEntries.length-1].date,
 modelVersion:SIGNAL_VERSION,
 predictedCodes:top5.map(function(x){return x[0];}),
 promotedCodes:[],patternRules:[],watchoutCodes:[],
-triggeredOutcome:{},regimeAtTime:null,
+triggeredOutcome:{},regimeAtTime:{shifting:regimeNow2.shifting,overlapScore:regimeNow2.overlapScore,note:regimeNow2.note||''},
 scores:top5.reduce(function(o,x){o[x[0]]=Math.round(x[1]/top5Max*100);return o;},{}),
 frozenScores:normScores,
 frozenSnapshots:compactSnaps2,
