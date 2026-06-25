@@ -4401,11 +4401,22 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
       ?'<span style="color:var(--muted);font-size:10px;font-family:var(--mono)"> \u00B7 '+hr.rate+'%('+hr.predicted+')</span>'
       :'<span style="color:var(--muted);font-size:10px"> \u00B7 N/A</span>';
 
+    // Obs window state
+    var obsState=(db.shops[activeShop]&&db.shops[activeShop].obsWindow&&
+      db.shops[activeShop].obsWindow[c])||{state:'idle'};
+    var obsLabel='';
+    var obsCol='var(--muted)';
+    if(obsState.state==='confirmed'){obsLabel='CONFIRMED';obsCol='var(--green)';}
+    else if(obsState.state==='watching'){obsLabel='WATCHING';obsCol='var(--gold)';}
+    else if(obsState.state==='overdue'){obsLabel='OVERDUE';obsCol='var(--red)';}
+    else if(obsState.state==='recovering'){obsLabel='RECOVERING';obsCol='var(--muted)';}
+
     return '<div class="pred-code-row">'
       +(typeIcon?'<span style="font-size:11px;min-width:16px">'+typeIcon+'</span>':'<span style="min-width:16px"></span>')
       +'<span class="pred-code" style="color:'+col+'">'+c+'</span>'
       +'<span class="pred-grade" style="color:'+grade.col+'">['+grade.grade+']'
         +(grade.adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')
+        +(obsLabel?'<span style="font-size:8px;color:'+obsCol+';margin-left:3px">'+obsLabel+'</span>':'')
       +'</span>'
       +'<div class="pred-bar-track"><div class="pred-bar-fill" style="width:'+combinedPct+'%;background:'+combinedCol+'"></div></div>'
       +'<span class="pred-pct" style="color:'+combinedCol+';font-weight:700">'+combinedLabel+'</span>'
