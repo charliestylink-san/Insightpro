@@ -4571,14 +4571,17 @@ function renderTrackScore(){
       var pct=Math.round((predScores[c]||0)/fullMax*100);
       var snap=snapByCode[c]||{};
       var grade=buildCodeConfidenceGrade(c,snap,weights,entries,preds,activeShop,pct);
+      var hr=buildCodeHitRate(c,preds);
+      var combined=hr?Math.round(pct*0.5+hr.rate*0.5):pct;
+      var combinedCol=combined>=60?'var(--green)':combined>=35?'var(--gold)':'var(--red)';
       var obsState=(obs[c]&&obs[c].state!=='idle')?'<span style="font-size:9px;color:var(--gold)"> '+obs[c].state.toUpperCase()+'</span>':'';
       return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)">'
         +'<span class="mono" style="font-weight:900;min-width:28px;color:var(--accent)">'+c+'</span>'
         +'<span style="font-size:11px;font-weight:900;font-family:var(--mono);color:'+grade.col+'">['+grade.grade+']'+(grade.adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')+'</span>'
         +'<div style="flex:1;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden">'
-          +'<div style="width:'+pct+'%;height:100%;background:'+grade.col+';border-radius:2px"></div>'
+          +'<div style="width:'+combined+'%;height:100%;background:'+combinedCol+';border-radius:2px"></div>'
         +'</div>'
-        +'<span style="font-size:11px;font-family:var(--mono);color:var(--muted)">'+pct+'%</span>'
+        +'<span style="font-size:11px;font-family:var(--mono);color:'+combinedCol+';font-weight:700">'+combined+'%</span>'
         +obsState
         +'</div>';
     }).join('');
@@ -5430,6 +5433,10 @@ function predCardHTML(pred, canResolve, trainEntries, trainPreds){
     var decompAllSnap=decompressSnap(allPredSnap,isCompactSnap);
     var rawSnap=decompAllSnap[c]||{};
     var grade=te.length>=3?buildCodeConfidenceGrade(c,rawSnap,wts,te,tp,activeShop,scorePct):{grade:'\u2014',col:'var(--muted)'};
+    // Combined % using only predictions resolved before this one (tp)
+    var hrHist=buildCodeHitRate(c,tp);
+    var combinedPct=hrHist?Math.round(scorePct*0.5+hrHist.rate*0.5):scorePct;
+    var combinedCol=combinedPct>=60?'var(--green)':combinedPct>=35?'var(--gold)':'var(--red)';
     var codeColor=type==='top5'?(isHit?'var(--green)':isMiss?'var(--red)':'var(--text)'):typeCol[type];
     return '<div style="display:flex;align-items:center;gap:5px;padding:3px 0">'
       +(typeIcon[type]?'<span style="font-size:10px;min-width:16px">'+typeIcon[type]+'</span>':'<span style="min-width:16px"></span>')
@@ -5437,9 +5444,9 @@ function predCardHTML(pred, canResolve, trainEntries, trainPreds){
       +(outcome?'<span style="font-size:11px;font-weight:700;color:'+outcomeCol+'">'+icon+'</span>':'<span style="min-width:12px"></span>')
       +'<span style="font-size:10px;font-weight:900;font-family:var(--mono);color:'+grade.col+'">['+grade.grade+']</span>'
       +'<div style="flex:1;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden">'
-        +'<div style="width:'+scorePct+'%;height:100%;background:'+(isHit?'var(--green)':isMiss?'var(--red)':'var(--accent)')+';border-radius:2px"></div>'
+        +'<div style="width:'+combinedPct+'%;height:100%;background:'+(isHit?'var(--green)':isMiss?'var(--red)':combinedCol)+';border-radius:2px"></div>'
       +'</div>'
-      +'<span style="font-size:10px;font-family:var(--mono);color:var(--muted);min-width:28px;text-align:right">'+scorePct+'%</span>'
+      +'<span style="font-size:10px;font-family:var(--mono);color:'+(isHit?'var(--green)':isMiss?'var(--red)':combinedCol)+';font-weight:700;min-width:28px;text-align:right">'+combinedPct+'%</span>'
       +'</div>';
   }
 
