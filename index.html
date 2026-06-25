@@ -4419,8 +4419,11 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
         +(obsLabel?'<span style="font-size:8px;color:'+obsCol+';margin-left:3px">'+obsLabel+'</span>':'')
       +'</span>'
       +'<div class="pred-bar-track"><div class="pred-bar-fill" style="width:'+combinedPct+'%;background:'+combinedCol+'"></div></div>'
-      +'<span class="pred-pct" style="color:'+combinedCol+';font-weight:700">'+combinedLabel+'</span>'
-      +'<span class="pred-sigs" style="font-size:9px;color:var(--muted)">sig:'+scorePct+'%'+(hr?' · '+hr.rate+'%('+hr.predicted+')':' · N/A')+' · '+topDriving+'</span>'
+      +'<span class="pred-pct" style="color:'+combinedCol+';font-weight:700">'+combinedLabel
+        +(hr?'<span style="color:'+(hr.rate>=50?'var(--green)':hr.rate>=30?'var(--gold)':'var(--red)')+';font-size:10px;font-family:var(--mono)"> \u00B7 '+hr.rate+'%('+hr.predicted+')</span>'
+            :'<span style="color:var(--muted);font-size:10px"> \u00B7 N/A</span>')
+      +'</span>'
+      +'<span class="pred-sigs" style="font-size:9px;color:var(--muted)">'+topDriving+'</span>'
       +'</div>';
   }
 
@@ -4548,6 +4551,29 @@ function renderTrackScore(){
     +'<span class="conf-badge '+confCls+'">'+verdictLabel(ms.level)+'</span>'
     +(ms.hitRate!==null?'<span style="font-size:12px;color:var(--muted)">'+ms.hitRate+'% hit &#xB7; '+ms.slotCov+'% slot</span>':'')
     +'</div>';
+
+  // Show frozen confidence number + grade from pending prediction (same as PREDICT)
+  var pendingForConf=preds.filter(function(p){return p.status==='pending';});
+  var frozenConfPred=pendingForConf.length?pendingForConf[pendingForConf.length-1]:null;
+  if(frozenConfPred&&frozenConfPred.frozenConf){
+    var fc=frozenConfPred.frozenConf;
+    var confNum=fc.score||fc.confidence||0;
+    var confGrade=fc.grade||'';
+    var confGradeCol=confGrade==='A'?'var(--green)':confGrade==='B'?'var(--green)':
+      confGrade==='C'?'var(--gold)':confGrade==='D'?'var(--red)':'var(--muted)';
+    if(confNum){
+      html='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+        +'<span style="font-size:32px;font-weight:900;font-family:var(--mono);color:'+confGradeCol+'">'+confNum+'</span>'
+        +'<div>'
+          +'<div style="font-size:14px;font-weight:700;color:'+confGradeCol+'">Grade '+confGrade+'</div>'
+          +'<div style="font-size:11px;color:var(--muted)">Refill confidence'
+            +(fc.adapted?'<span style="color:var(--green);margin-left:4px">&#x2605; adapted</span>':'')
+          +'</div>'
+        +'</div>'
+        +'<span class="conf-badge '+confCls+'" style="margin-left:auto">'+verdictLabel(ms.level)+'</span>'
+      +'</div>';
+    }
+  }
 
   // Per-code grade table — read from frozen pending prediction (same source as PREDICT)
   var pending=preds.filter(function(p){return p.status==='pending';});
@@ -5305,15 +5331,20 @@ if(Object.keys(cs).length)compactSnaps[c]=cs;
 var predId=Date.now();
 saveSnapshot(predId,compactSnaps);
 var regimeNow=detectRegimeShift(allEntries);
+var top5CodesRebuild=finalTop5.map(function(x){return x[0];});
+var frozenSummaryRebuild=buildPlainEnglishSummary(allEntries,db.shops[letter].predictions||[],top5CodesRebuild,finalResult,letter)||'';
+var frozenConfRebuild=buildRefillConfidenceScore(allEntries,db.shops[letter].predictions||[],top5CodesRebuild,finalResult,letter)||null;
 db.shops[letter].predictions.push({
 id:predId,createdDate:allEntries[allEntries.length-1].date,
 modelVersion:SIGNAL_VERSION,
-predictedCodes:finalTop5.map(function(x){return x[0];}),
+predictedCodes:top5CodesRebuild,
 promotedCodes:[],patternRules:[],watchoutCodes:[],
 regimeAtTime:{shifting:regimeNow.shifting,overlapScore:regimeNow.overlapScore,note:regimeNow.note||''},
 scores:finalTop5.reduce(function(o,x){o[x[0]]=Math.round(x[1]/fMax*100);return o;},{}),
 frozenScores:fNorm,
 frozenSnapshots:compactSnaps,
+frozenSummary:frozenSummaryRebuild,
+frozenConf:frozenConfRebuild,
 weightsAtTime:Object.assign({},finalResult.weights),
 status:'pending',outcome:null,actualDate:null,actualCodes:null,auto:true,
     modelVerId:(db.shops[letter]&&db.shops[letter].currentModelVerId)||null
