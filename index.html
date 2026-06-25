@@ -2538,6 +2538,16 @@ var btDiffVal=btLearned&&btCurrent?btLearned.hitRate-btCurrent.hitRate:null;
 // shouldUpdate: backtest positive AND consistent signal AND meaningful improvement
 var shouldUpdate=btPositive&&hitGain>0&&consistent;
 
+// Learner decides its own readiness to surface — no hardcoded N
+// Cross-checks internal evidence against backtest result:
+// 1. btN must be meaningful relative to what learner has observed
+// 2. consistency must agree with btDiff direction
+// 3. snapshotCount must show enough observations to trust the signal
+var btNMeaningful=TEST_N>=snaps.length; // backtest covers at least as many refills as learner has snapshots
+var consistencyAgreesWithBT=btPositive?(consistency>=0.6):true;
+var enoughObservations=snaps.length>=3;
+var readyToSurface=btNMeaningful&&consistencyAgreesWithBT&&enoughObservations;
+
 // Primary decision based on backtest
 var needsAlert=!shouldUpdate||(maxDelta>0.05||counterSignals.length>0||hitRateDecline);
 
@@ -2556,16 +2566,21 @@ var sameModel=lastAlert&&lastAlert.learnedW&&
   Math.max.apply(null,SIGNAL_KEYS.map(function(k){
     return Math.abs((learnedW[k]||0)-(lastAlert.learnedW[k]||0));
   }))<0.02;
-if(!shouldUpdate||sameModel){
-  // Still store a hold verdict so owner can see learner's assessment
+if(!shouldUpdate||sameModel||!readyToSurface){
+  // Not ready to surface — store internally but stay silent
   if(!sameModel){
     var curT5Early=Object.entries(buildCombinedScore(sorted,preds,letter).scores)
       .sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
     db.shops[letter].learnerAlert={
       ts:Date.now(),hitGain:hitGain,applied:false,needsAlert:true,
-      alertReason:!btPositive
-        ?'Backtest shows no improvement over '+TEST_N+' refills \u2014 holding current model'
-        :'Not enough consistent signal yet \u2014 holding current model',
+      readyToSurface:false,
+      alertReason:!enoughObservations
+        ?'Accumulating data \u2014 '+snaps.length+' refill'+(snaps.length===1?'':'s')+' observed so far'
+        :!btNMeaningful
+          ?'Backtest window ('+TEST_N+') smaller than observation window ('+snaps.length+') \u2014 collecting more data'
+          :!consistencyAgreesWithBT
+            ?'Signal not consistent enough yet \u2014 '+Math.round(consistency*100)+'% consistent across '+snaps.length+' refills'
+            :'Backtest shows no improvement \u2014 holding current model',
       consistencyPct:Math.round(consistency*100),snapshotCount:snaps.length,
       currentHits:currentHits,learnedHits:learnedHits,testN:TEST_N,
       btAnchorRate:btLearned?btLearned.hitRate:null,
@@ -2600,6 +2615,7 @@ var sigChanges=SIGNAL_KEYS.map(function(k){
 var btDiff=btDiffVal;
 db.shops[letter].learnerAlert={
   ts:Date.now(),hitGain:hitGain,applied:!needsAlert,needsAlert:needsAlert,
+  readyToSurface:true,
   alertReason:needsAlert?alertReason:null,
   avgGain:Math.round(snaps.reduce(function(s,x){return s+x.hitGain;},0)/snaps.length*10)/10,
   consistencyPct:Math.round(consistency*100),snapshotCount:snaps.length,
@@ -3702,7 +3718,9 @@ function renderLearnerAlert(letter){
   db=loadDB();
   var a=db.shops[letter]&&db.shops[letter].learnerAlert;
   if(!a||a.hitGain===undefined){el.style.display='none';return;}
-  // Always show if learner has run — even hold verdict
+  // Stay silent if learner hasn't cross-checked its own evidence yet
+  if(a.readyToSurface===false){el.style.display='none';return;}
+  // Always show if learner has run and is ready — even hold verdict
   if(!a.btAnchorRate&&(!a.hitGain||a.hitGain<=0)){el.style.display='none';return;}
   el.style.display='block';
   var boost=(a.topBoost||[]).map(function(s){return (SIGNAL_NAMES[s.k]||s.k)+' &#x2191;';}).join(', ');
