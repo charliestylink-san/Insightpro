@@ -2535,17 +2535,19 @@ var hitRateDecline=analysis.trending==="declining"&&
 var btPositive=btLearned&&btCurrent&&(btLearned.hitRate-btCurrent.hitRate)>0;
 var btDiffVal=btLearned&&btCurrent?btLearned.hitRate-btCurrent.hitRate:null;
 
-// Alert conditions — even if backtest is positive, flag for review if risky
-var needsAlert=(!btPositive)||(maxDelta>0.05||counterSignals.length>0||hitRateDecline);
-// shouldUpdate: backtest positive AND consistent signal
-var shouldUpdate=btPositive&&hitGain>0&&consistent;
-// Alert reason — now driven by backtest first
+// Primary decision based on backtest
+var needsAlert=!shouldUpdate||(maxDelta>0.05||counterSignals.length>0||hitRateDecline);
+
+// Alert reason — clear and honest
 var alertReason=!btPositive
   ?'Backtest shows no improvement over '+TEST_N+' refills \u2014 holding current model'
-  :counterSignals.length>0
-    ?'Counter-predictive signal: '+(counterSignals.map(function(k){return SIGNAL_NAMES[k]||k;}).join(', '))
-    :hitRateDecline?'Hit rate declining \u2014 review before applying'
-    :'Backtest positive but significant weight shift ('+Math.round(maxDelta*100)+'%) \u2014 review suggested';
+  :!consistent&&btPositive
+    ?'Backtest \u2191+'+Math.round(btDiffVal||0)+'% but only '+TEST_N+' refills tested \u2014 not enough to be certain'
+    :counterSignals.length>0
+      ?'Counter-predictive signal detected: '+(counterSignals.map(function(k){return SIGNAL_NAMES[k]||k;}).join(', '))
+      :hitRateDecline
+        ?'Hit rate declining \u2014 review before applying'
+        :'Significant weight shift ('+Math.round(maxDelta*100)+'%) \u2014 review before applying';
 var lastAlert=db.shops[letter].learnerAlert;
 var sameModel=lastAlert&&lastAlert.learnedW&&
   Math.max.apply(null,SIGNAL_KEYS.map(function(k){
@@ -3733,13 +3735,18 @@ function renderLearnerAlert(letter){
     var headerIcon=isHold?'&#x23F8;':isAnchor?'&#x2605;':'&#x26A0;&#xFE0F;';
     var headerText=isAnchor
       ?(isHold?'Anchor '+a.anchorDate+' \u2014 Hold current model':'Anchor '+a.anchorDate+' \u2014 Apply this model')
-      :(isHold?'Hold current model':'Review before applying');
+      :(isHold&&a.btDiff===0?'No improvement found'
+        :isHold?'Hold current model'
+        :'Review before applying');
+    var subText=isAnchor?a.alertReason
+      :(a.btN&&a.btN<5?a.alertReason+' (only '+a.btN+' refills tested)'
+        :a.alertReason);
     el.innerHTML='<div class="learner-card" style="border-color:'+headerColor+'">'
       +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
         +'<span style="font-size:16px">'+headerIcon+'</span>'
         +'<div>'
           +'<div style="font-size:12px;font-weight:700;color:'+headerColor+'">'+headerText+'</div>'
-          +'<div style="font-size:10px;color:var(--muted)">'+a.alertReason+'</div>'
+          +'<div style="font-size:10px;color:var(--muted)">'+subText+'</div>'
         +'</div>'
       +'</div>'
       +btHTML
@@ -4257,12 +4264,18 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
   var el=document.getElementById('prediction-codes');
   if(!el) return;
 
-  if(!frozenPred||!frozenPred.frozenScores||!Object.keys(frozenPred.frozenScores).length){
+  // Accept frozenScores (new) or scores (old format)
+  var predScores=frozenPred&&(
+    (frozenPred.frozenScores&&Object.keys(frozenPred.frozenScores).length)?frozenPred.frozenScores:
+    (frozenPred.scores&&Object.keys(frozenPred.scores||{}).length)?frozenPred.scores:null
+  );
+
+  if(!frozenPred||!predScores){
     el.innerHTML='<div class="empty"><p>No frozen prediction — run Rebuild</p></div>';
     return;
   }
 
-  var frozen=frozenPred.frozenScores;
+  var frozen=predScores;
   var weights=frozenPred.weightsAtTime||{};
   var fullMax=Math.max.apply(null,Object.values(frozen).concat([1]));
   var top5Codes=frozenPred.predictedCodes||[];
