@@ -4111,13 +4111,19 @@ function renderPredictTab(){
   var preds=shopPreds(activeShop);
   var entries=shopEntries(activeShop);
 
-  // Get frozen pending prediction — this is the ONLY source for PREDICT display
+  // Get frozen pending prediction
   var pending=preds.filter(function(p){return p.status==='pending';});
   var pred=pending.length?pending[pending.length-1]:null;
 
-  if(!pred||!pred.frozenScores||!Object.keys(pred.frozenScores).length){
+  // Accept pred if it has frozenScores OR scores (older predictions may use scores only)
+  var predScores=pred&&(pred.frozenScores&&Object.keys(pred.frozenScores).length
+    ?pred.frozenScores
+    :pred.scores&&Object.keys(pred.scores||{}).length?pred.scores:null);
+
+  if(!pred||!predScores){
     ['refill-confidence','plain-english','prediction-codes']
-      .forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML='<div class="empty"><p>No prediction yet — run Rebuild</p></div>';});
+      .forEach(function(id){var el=document.getElementById(id);
+        if(el)el.innerHTML='<div class="empty"><p>No prediction yet — run Rebuild</p></div>';});
     document.getElementById('signal-perf-panel').innerHTML='';
     document.getElementById('pairs-panel').innerHTML='';
     renderLearnerAlert(activeShop);
@@ -4125,34 +4131,36 @@ function renderPredictTab(){
   }
 
   try{
-    // All display data comes from frozen prediction — no buildCombinedScore
-    var frozenScores=pred.frozenScores;
+    var frozenScores=predScores;
     var weightsAtFreezeTime=pred.weightsAtTime||getWeights(activeShop);
-
-    // Decompress frozen snapshots for signal display
     var isCompact=!!(pred.frozenSnapshots&&pred.modelVersion);
     var rawSnap=getSnapshotForPred(pred);
     var snapByCode=decompressSnap(rawSnap,isCompact);
 
-    // Signals — from frozen weights and analysis of resolved predictions only
-    renderSignalPerf(weightsAtFreezeTime,preds,snapByCode,frozenScores);
-
-    // Confidence — from frozen scores
-    renderConfidenceScore(entries,preds,{
+    // Build a result-like object from frozen data for render functions
+    var frozenResult={
       scores:frozenScores,
       snapshots:snapByCode,
       weights:weightsAtFreezeTime,
       regime:pred.regimeAtTime||null,
-      signalLifts:null
-    });
+      signalLifts:null,
+      frozenConf:pred.frozenConf||null,
+      frozenSummary:pred.frozenSummary||null
+    };
+
+    // Signals — reads from stored performanceAnalysis (frozen by learner)
+    renderSignalPerf(weightsAtFreezeTime,preds,snapByCode,frozenScores);
+
+    // Confidence and plain English — from frozen data
+    renderConfidenceScore(entries,preds,frozenResult);
 
     // Prediction codes — from frozen prediction only
     renderPredictionCodes(null,entries,preds,pred);
 
-    // Pairs — from entries history (static analysis, no model recalc)
+    // Pairs — from entries history (static co-occurrence, no model recalc)
     renderPairs(entries,frozenScores);
 
-    // Learner alert — background recommendation
+    // Learner — background only
     renderLearnerAlert(activeShop);
 
   }catch(e){
@@ -4216,7 +4224,8 @@ function renderConfidenceScore(entries,preds,result){
   // Use frozen confidence if available, otherwise compute from result
   var rcs=result.frozenConf||null;
   if(!rcs){
-    var top5Codes=Object.entries(result.scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
+    var allScores=result.scores||result.frozenScores||{};
+    var top5Codes=Object.entries(allScores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
     rcs=buildRefillConfidenceScore(entries,preds,top5Codes,result,activeShop);
   }
   var adapted=rcs.adapted;
@@ -4659,22 +4668,45 @@ function renderBestPredList(){
   }
 
   // Render immediately
-  el.innerHTML=candidates.map(function(p){return rowHTML(p,null);}).join('');
+  el.innerHTML=candidates.map(function(p){return rowHTML(p,p.btCache||null);}).join('');
 
-  // Phase 2: backtest each row lazily with delay between each
+  // Phase 2: backtest each row lazily — skip if already cached
+  // Cache current model once for all anchor comparisons
+  var currentCacheKey='current-'+activeShop;
+  var currentBTCache=db.shops[activeShop].currentBTCache||{};
+
   candidates.forEach(function(p, idx){
+    if(p.btCache){return;} // already computed — skip
     setTimeout(function(){
+      db=loadDB();
       var fromDate=p.actualDate||p.createdDate;
+
+      // Use cached current model result if same fromDate
+      var cachedCur=currentBTCache[fromDate];
+      if(!cachedCur){
+        var btCurResult=backtestWeights(activeShop,currentW,fromDate);
+        cachedCur={rate:btCurResult?btCurResult.hitRate:null,n:btCurResult?btCurResult.detail.length:0};
+        currentBTCache[fromDate]=cachedCur;
+        db.shops[activeShop].currentBTCache=currentBTCache;
+      }
+
       var bt=backtestWeights(activeShop,p.weightsAtTime,fromDate);
-      var btCur=bt?backtestWeights(activeShop,currentW,fromDate):null;
       var btInfo=bt?{
         rate:bt.hitRate,
         n:bt.detail.length,
-        diff:btCur?bt.hitRate-btCur.hitRate:null
+        diff:cachedCur.rate!==null?bt.hitRate-cachedCur.rate:null
       }:null;
+
+      // Cache on prediction object so next open is instant
+      if(btInfo){
+        db=loadDB();
+        var pred2=db.shops[activeShop].predictions.find(function(q){return q.id===p.id;});
+        if(pred2){pred2.btCache=btInfo; saveDB(db);}
+      }
+
       var row=document.getElementById('bprow-'+p.id);
       if(row) row.outerHTML=rowHTML(p,btInfo);
-    }, idx*300); // 300ms apart — responsive, not blocking
+    }, idx*400); // 400ms apart — gives buildWeightedScoreDirect time to finish
   });
 }
 
@@ -4748,7 +4780,13 @@ function useBestPredModel(predId){
   var diff=anchorTest&&currentTest?anchorTest.hitRate-currentTest.hitRate:null;
   var btN=anchorTest?anchorTest.detail.length:0;
 
+  // Cache result on prediction object so next open is instant
+  db=loadDB();
+  var predToCache=db.shops[activeShop].predictions.find(function(q){return String(q.id)===String(predId);});
+  if(predToCache&&anchorTest){predToCache.btCache={rate:anchorTest.hitRate,n:btN,diff:diff};saveDB(db);}
+
   snapshotCurrentWeights(activeShop);
+  db=loadDB();
   db.shops[activeShop].weights=Object.assign({},pred.weightsAtTime);
   db.shops[activeShop].pinnedPredId=String(predId);
 
@@ -4946,6 +4984,7 @@ var livePendingToKeep=existing.length>0&&existing[0].createdDate>=lastEntryDate?
 db.shops[letter].predictions=(s.predictions||[]).filter(function(p){return !p.auto||p.liveResolved;});
 db.shops[letter].obsWindow={};
 db.shops[letter].gradAccum={};
+db.shops[letter].currentBTCache={}; // clear cached backtest results on rebuild
 saveDB(db);
 var i=2;
 var resolvedCount=0;
