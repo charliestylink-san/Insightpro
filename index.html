@@ -4388,9 +4388,9 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
       +'<span class="pred-grade" style="color:'+grade.col+'">['+grade.grade+']'
         +(grade.adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')
       +'</span>'
-      +'<div class="pred-bar-track"><div class="pred-bar-fill" style="width:'+scorePct+'%;background:'+(consensus.yesSignals.length?SIGNAL_COLORS[consensus.yesSignals[0]]||'var(--accent)':'var(--muted)')+'"></div></div>'
-      +'<span class="pred-pct" style="color:'+combinedCol+';font-weight:700">'+combinedLabel+hrDisplay+'</span>'
-      +'<span class="pred-sigs">'+topDriving+'</span>'
+      +'<div class="pred-bar-track"><div class="pred-bar-fill" style="width:'+combinedPct+'%;background:'+combinedCol+'"></div></div>'
+      +'<span class="pred-pct" style="color:'+combinedCol+';font-weight:700">'+combinedLabel+'</span>'
+      +'<span class="pred-sigs" style="font-size:9px;color:var(--muted)">sig:'+scorePct+'%'+(hr?' · '+hr.rate+'%('+hr.predicted+')':' · N/A')+' · '+topDriving+'</span>'
       +'</div>';
   }
 
@@ -4519,20 +4519,24 @@ function renderTrackScore(){
     +(ms.hitRate!==null?'<span style="font-size:12px;color:var(--muted)">'+ms.hitRate+'% hit &#xB7; '+ms.slotCov+'% slot</span>':'')
     +'</div>';
 
-  // Per-code grade table from pending prediction
-  var pending=preds.filter(function(p){return p.status==='pending';})[0];
-  if(pending){
-    var result=buildCombinedScore(entries,preds,activeShop);
-    var scores=result.scores;
-    var snaps=result.snapshots;
-    var weights=result.weights;
-    var top5=Object.entries(scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
-    var fullMax=Math.max.apply(null,Object.values(scores).concat([0.001]));
-    html+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Current prediction grades</div>';
-    html+=top5.map(function(x){
-      var c=x[0];
-      var pct=Math.round(x[1]/fullMax*100);
-      var snap=snaps[c]||{};
+  // Per-code grade table — read from frozen pending prediction (same source as PREDICT)
+  var pending=preds.filter(function(p){return p.status==='pending';});
+  var frozenPred=pending.length?pending[pending.length-1]:null;
+  if(frozenPred){
+    var predScores=frozenPred.frozenScores&&Object.keys(frozenPred.frozenScores).length
+      ?frozenPred.frozenScores
+      :frozenPred.scores||{};
+    var weights=frozenPred.weightsAtTime||{};
+    var isCompact=!!(frozenPred.frozenSnapshots&&frozenPred.modelVersion);
+    var rawSnap=getSnapshotForPred(frozenPred);
+    var snapByCode=decompressSnap(rawSnap,isCompact);
+    var top5Codes=frozenPred.predictedCodes||
+      Object.entries(predScores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
+    var fullMax=Math.max.apply(null,Object.values(predScores).concat([0.001]));
+    html+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Frozen prediction grades</div>';
+    html+=top5Codes.map(function(c){
+      var pct=Math.round((predScores[c]||0)/fullMax*100);
+      var snap=snapByCode[c]||{};
       var grade=buildCodeConfidenceGrade(c,snap,weights,entries,preds,activeShop,pct);
       var obsState=(obs[c]&&obs[c].state!=='idle')?'<span style="font-size:9px;color:var(--gold)"> '+obs[c].state.toUpperCase()+'</span>':'';
       return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)">'
