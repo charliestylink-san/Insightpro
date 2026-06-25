@@ -2535,6 +2535,9 @@ var hitRateDecline=analysis.trending==="declining"&&
 var btPositive=btLearned&&btCurrent&&(btLearned.hitRate-btCurrent.hitRate)>0;
 var btDiffVal=btLearned&&btCurrent?btLearned.hitRate-btCurrent.hitRate:null;
 
+// shouldUpdate: backtest positive AND consistent signal AND meaningful improvement
+var shouldUpdate=btPositive&&hitGain>0&&consistent;
+
 // Primary decision based on backtest
 var needsAlert=!shouldUpdate||(maxDelta>0.05||counterSignals.length>0||hitRateDecline);
 
@@ -4260,6 +4263,17 @@ function renderConfidenceScore(entries,preds,result){
   }
 }
 
+function buildCodeHitRate(code, preds){
+  var resolved=preds.filter(function(p){
+    return p.status!=='pending'&&p.outcome&&p.predictedCodes&&
+           p.predictedCodes.indexOf(code)>-1;
+  });
+  if(resolved.length<3) return null;
+  var hits=resolved.filter(function(p){return p.outcome[code]==='hit';}).length;
+  return {predicted:resolved.length, hits:hits,
+          rate:Math.round(hits/resolved.length*100)};
+}
+
 function renderPredictionCodes(result,entries,preds,frozenPred){
   var el=document.getElementById('prediction-codes');
   if(!el) return;
@@ -4295,6 +4309,14 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
     var grade=buildCodeConfidenceGrade(c,snap,weights,entries,preds,activeShop,scorePct);
     var typeIcon=type==='top5'?'':type==='promoted'?'&#x1F52C;':type==='watchout'?'&#x26A0;&#xFE0F;':'&#x1F3AF;';
     var col=type==='top5'?'var(--text)':type==='promoted'?'var(--green)':type==='watchout'?'var(--gold)':'var(--teal)';
+
+    // Per-code historical hit rate (2nd number)
+    var hr=buildCodeHitRate(c,preds);
+    var hrDisplay=hr
+      ?'<span style="color:'+(hr.rate>=50?'var(--green)':hr.rate>=30?'var(--gold)':'var(--red)')
+        +';font-size:10px;font-family:var(--mono)"> \u00B7 '+hr.rate+'%('+(hr.predicted)+')</span>'
+      :'<span style="color:var(--muted);font-size:10px"> \u00B7 N/A</span>';
+
     return '<div class="pred-code-row">'
       +(typeIcon?'<span style="font-size:11px;min-width:16px">'+typeIcon+'</span>':'<span style="min-width:16px"></span>')
       +'<span class="pred-code" style="color:'+col+'">'+c+'</span>'
@@ -4302,7 +4324,7 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
         +(grade.adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')
       +'</span>'
       +'<div class="pred-bar-track"><div class="pred-bar-fill" style="width:'+scorePct+'%;background:'+(consensus.yesSignals.length?SIGNAL_COLORS[consensus.yesSignals[0]]||'var(--accent)':'var(--muted)')+'"></div></div>'
-      +'<span class="pred-pct">'+scorePct+'%</span>'
+      +'<span class="pred-pct">'+scorePct+'%'+hrDisplay+'</span>'
       +'<span class="pred-sigs">'+topDriving+'</span>'
       +'</div>';
   }
