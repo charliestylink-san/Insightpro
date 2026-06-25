@@ -350,6 +350,12 @@ hr.divider{border:none;border-top:1px solid var(--border);margin:10px 0}
     <div id="optimize-result"></div>
   </div>
 
+  <!-- ④ Model History -->
+  <div class="section-title collapsed" id="sec-title-model-history" onclick="toggleSection('model-history')">&#x2463; Model History<span class="toggle-icon">&#x25BE;</span></div>
+  <div id="sec-model-history" class="section-body collapsed" style="max-height:0px">
+    <div id="model-history-panel"></div>
+  </div>
+
 </div><!-- /panel-track -->
 
   </div><!-- /panels -->
@@ -432,28 +438,30 @@ var DB_KEY='inv_intel_v4', DB_BAK='inv_intel_bak', AK_KEY='inv_intel_apikey';
 // \u2500\u2500 ENGINE \u2500\u2500
 var DEFAULT_WEIGHTS = {
 freq:     0.12,
-recency:  0.11,
-streak:   0.09,
-bias:     0.07,
-cooccur:  0.12,
-interval: 0.06,
+recency:  0.10,
+streak:   0.08,
+bias:     0.06,
+cooccur:  0.11,
+seqcooccur: 0.10,
+interval: 0.05,
 dow:      0.03,
-cycle:    0.09,
+cycle:    0.08,
 overdue:  0.06,
-qtydom:   0.09,
-qtystreak:0.06,
-momentum: 0.14
+qtydom:   0.08,
+qtystreak:0.05,
+momentum: 0.12
 };
-var SIGNAL_KEYS = ['freq','recency','streak','bias','cooccur','interval','dow','cycle','overdue','qtydom','qtystreak','momentum'];
+var SIGNAL_KEYS = ['freq','recency','streak','bias','cooccur','seqcooccur','interval','dow','cycle','overdue','qtydom','qtystreak','momentum'];
 var SIGNAL_NAMES = {
 freq:'Frequency', recency:'Recency', streak:'Streak', bias:'Pred. accuracy',
-cooccur:'Co-occur', interval:'Interval', dow:'Day-of-wk', cycle:'Cycle',
+cooccur:'Co-occur', seqcooccur:'Seq. co-occur', interval:'Interval', dow:'Day-of-wk', cycle:'Cycle',
 overdue:'Overdue', qtydom:'Qty dominance', qtystreak:'Qty streak',
 momentum:'Momentum'
 };
 var SIGNAL_COLORS = {
 freq:'var(--sig-freq)', recency:'var(--sig-recency)', streak:'var(--sig-streak)',
-bias:'var(--sig-bias)', cooccur:'var(--sig-cooccur)', interval:'var(--sig-interval)',
+bias:'var(--sig-bias)', cooccur:'var(--sig-cooccur)', seqcooccur:'var(--sig-cooccur)',
+interval:'var(--sig-interval)',
 dow:'var(--sig-dow)', cycle:'var(--sig-cycle)', overdue:'var(--sig-overdue)',
 qtydom:'var(--sig-qtydom)', qtystreak:'var(--sig-qtystreak)',
 momentum:'var(--sig-momentum)'
@@ -850,6 +858,7 @@ var rec       = buildWeightedScore(entries);
 var str       = buildStreaks(entries);
 var bias      = buildBias(predictions||[]);
 var cooc      = buildCooccurrence(entries);
+var seqcooc   = buildSequentialCooccur(entries);
 var tightCooc = buildTightCooccurrence(entries);
 var intReg    = buildIntervalRegularity(entries);
 var dow       = buildDowPattern(entries);
@@ -920,12 +929,14 @@ all.forEach(function(c){
 var bVal  = bias[c]!==undefined ? bias[c] : 0.5;
 var boost = Math.max(0,(bVal-0.5)*2);
 var coocNorm = ((cooc[c]||0)/mC + (tightCooc[c]||0)/mTC*2)/3;
+var mSC = Math.max.apply(null,Object.values(seqcooc).concat([0.001]));
 var sig = {
 freq:      (freq[c]||0)/mF,
 recency:   (rec[c]||0)/mR,
 streak:    (str[c]||0)/mS,
 bias:      boost,
 cooccur:   coocNorm,
+seqcooccur:(seqcooc[c]||0)/(mSC||1),
 interval:  (intReg[c]||0),
 dow:       (dow[c]||0),
 cycle:     (cycle[c]||0),
@@ -940,6 +951,7 @@ sig.recency   * effectiveW.recency   +
 sig.streak    * effectiveW.streak    +
 sig.bias      * effectiveW.bias      +
 sig.cooccur   * effectiveW.cooccur   +
+sig.seqcooccur* (effectiveW.seqcooccur||DEFAULT_WEIGHTS.seqcooccur) +
 sig.interval  * effectiveW.interval  +
 sig.dow       * effectiveW.dow       +
 sig.cycle     * effectiveW.cycle     +
@@ -4205,24 +4217,42 @@ function renderSignalPerf(weights,preds,snaps,scores){
   var sigEff=analysis&&analysis.sigEffectiveness||{};
   var missed=analysis&&analysis.missedOpportunities||[];
 
-  // Signal bars with effectiveness from analysis
-  var html=SIGNAL_KEYS.map(function(k){
+  // Signal profile — per-shop effectiveness
+  var html='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Signal profile for '+activeShop+'</div>';
+  html+=SIGNAL_KEYS.map(function(k){
     var w=Math.round((weights[k]||DEFAULT_WEIGHTS[k])*100);
     var col=SIGNAL_COLORS[k]||'var(--accent)';
     var eff=sigEff[k];
-    var liftStr='',liftCol='var(--muted)';
-    if(eff&&eff.lift!==null){
+    var liftStr='',liftCol='var(--muted)',statusDot='';
+
+    if(eff&&eff.lift!==null&&eff.n>=3){
       var lift=Math.round(eff.lift*100);
-      if(eff.label==='predictive'){liftStr='&#x2191; +'+lift+'%';liftCol='var(--green)';}
-      else if(eff.label==='counter'){liftStr='&#x2193; '+lift+'%';liftCol='var(--red)';}
-      else if(eff.label==='weak'){liftStr='&#x2191; +'+lift+'%';liftCol='var(--muted)';}
-      else{liftStr='&#x2192; neutral';liftCol='var(--muted)';}
+      if(eff.lift>0.05){
+        liftStr='\u2191 working ('+lift+'%, '+eff.n+'obs)';
+        liftCol='var(--green)';
+        statusDot='<span style="color:var(--green);font-size:8px">\u25CF</span>';
+      } else if(eff.lift<-0.10){
+        liftStr='\u2193 suppressed ('+lift+'%, '+eff.n+'obs)';
+        liftCol='var(--red)';
+        statusDot='<span style="color:var(--red);font-size:8px">\u25CF</span>';
+      } else {
+        liftStr='neutral ('+lift+'%, '+eff.n+'obs)';
+        liftCol='var(--muted)';
+        statusDot='<span style="color:var(--muted);font-size:8px">\u25CB</span>';
+      }
+    } else if(eff&&eff.n>0){
+      liftStr='insufficient data ('+eff.n+'obs)';
+      liftCol='var(--muted)';
+      statusDot='<span style="color:var(--muted);font-size:8px">\u25A1</span>';
     } else {
       liftStr='no data yet';
+      liftCol='var(--muted)';
+      statusDot='<span style="color:var(--muted);font-size:8px">\u25A1</span>';
     }
+
     return '<div class="sig-bar-wrap">'
       +'<div class="sig-bar-row">'
-        +'<span class="sig-bar-name">'+((SIGNAL_NAMES&&SIGNAL_NAMES[k])||k)+'</span>'
+        +'<span class="sig-bar-name">'+statusDot+' '+((SIGNAL_NAMES&&SIGNAL_NAMES[k])||k)+'</span>'
         +'<div class="sig-bar-track"><div class="sig-bar-fill" style="width:'+w+'%;background:'+col+'"></div></div>'
         +'<span class="sig-bar-val" style="color:'+col+'">'+w+'%</span>'
         +'<span class="sig-bar-lift" style="color:'+liftCol+'">'+liftStr+'</span>'
@@ -4230,7 +4260,7 @@ function renderSignalPerf(weights,preds,snaps,scores){
       +'</div>';
   }).join('');
 
-  // Missed opportunities (Q2 \u2014 what should have been predicted)
+  // Missed opportunities
   if(missed.length){
     html+='<div style="margin-top:10px;font-size:10px;font-weight:700;color:var(--muted);'
       +'text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Missed opportunities</div>';
@@ -4238,7 +4268,7 @@ function renderSignalPerf(weights,preds,snaps,scores){
       var topSigNames=m.topSignals.map(function(s){return SIGNAL_NAMES[s.k]||s.k;}).join(', ');
       return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">'
         +'<span class="mono" style="font-weight:900;color:var(--gold);min-width:28px">'+m.code+'</span>'
-        +'<span style="font-size:11px;color:var(--muted);flex:1">missed '+m.missCount+'\u00D7 &#xB7; signals: '+topSigNames+'</span>'
+        +'<span style="font-size:11px;color:var(--muted);flex:1">missed '+m.missCount+'\u00D7 \u00B7 signals: '+topSigNames+'</span>'
       +'</div>';
     }).join('');
   }
@@ -4311,8 +4341,15 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
   var weights=frozenPred.weightsAtTime||{};
   var fullMax=Math.max.apply(null,Object.values(frozen).concat([1]));
   var top5Codes=frozenPred.predictedCodes||[];
-  var promoted=frozenPred.promotedCodes||[];
-  var watchouts=frozenPred.watchoutCodes||[];
+  // Deduplicate promoted and watchout arrays
+  var seen=[];
+  var promoted=(frozenPred.promotedCodes||[]).filter(function(c){
+    if(seen.indexOf(c)>-1) return false; seen.push(c); return true;
+  });
+  var seen2=[];
+  var watchouts=(frozenPred.watchoutCodes||[]).filter(function(c){
+    if(seen2.indexOf(c)>-1) return false; seen2.push(c); return true;
+  });
 
   // Decompress frozen snapshots — these are the signal values at freeze time
   var isCompact=!!(frozenPred.frozenSnapshots&&frozenPred.modelVersion);
@@ -4330,9 +4367,19 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
 
     // Per-code historical hit rate (2nd number)
     var hr=buildCodeHitRate(c,preds);
+    // Combined indicator: weighted blend of signal strength and historical hit rate
+    var combinedPct, combinedCol, combinedLabel;
+    if(hr){
+      combinedPct=Math.round(scorePct*0.5 + hr.rate*0.5);
+      combinedCol=combinedPct>=60?'var(--green)':combinedPct>=35?'var(--gold)':'var(--red)';
+      combinedLabel=combinedPct+'%';
+    } else {
+      combinedPct=scorePct;
+      combinedCol='var(--muted)';
+      combinedLabel=scorePct+'%';
+    }
     var hrDisplay=hr
-      ?'<span style="color:'+(hr.rate>=50?'var(--green)':hr.rate>=30?'var(--gold)':'var(--red)')
-        +';font-size:10px;font-family:var(--mono)"> \u00B7 '+hr.rate+'%('+(hr.predicted)+')</span>'
+      ?'<span style="color:var(--muted);font-size:10px;font-family:var(--mono)"> \u00B7 '+hr.rate+'%('+hr.predicted+')</span>'
       :'<span style="color:var(--muted);font-size:10px"> \u00B7 N/A</span>';
 
     return '<div class="pred-code-row">'
@@ -4342,7 +4389,7 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
         +(grade.adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')
       +'</span>'
       +'<div class="pred-bar-track"><div class="pred-bar-fill" style="width:'+scorePct+'%;background:'+(consensus.yesSignals.length?SIGNAL_COLORS[consensus.yesSignals[0]]||'var(--accent)':'var(--muted)')+'"></div></div>'
-      +'<span class="pred-pct">'+scorePct+'%'+hrDisplay+'</span>'
+      +'<span class="pred-pct" style="color:'+combinedCol+';font-weight:700">'+combinedLabel+hrDisplay+'</span>'
       +'<span class="pred-sigs">'+topDriving+'</span>'
       +'</div>';
   }
@@ -4445,6 +4492,7 @@ function renderTrackTab(){
     if(el) el.innerHTML=info+'<div class="alert alert-err">History error: '+e.message+'</div>';
     return;
   }
+  try{ renderModelHistory(); }catch(e){}
   try{ renderBestPredList(); }catch(e){}
 }
 
@@ -4667,6 +4715,82 @@ function dismissLearnerAlert(isHold){
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // BEST PREDICTION ANCHOR (Track tab)
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+function renderModelHistory(){
+  var el=document.getElementById('model-history-panel');
+  if(!el||!activeShop) return;
+  db=loadDB();
+  var history=(db.shops[activeShop].modelHistory||[]).slice().reverse();
+  var preds=shopPreds(activeShop);
+
+  if(!history.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:4px 0">No model decisions recorded yet. Apply or Hold a learner recommendation to start tracking.</div>';
+    return;
+  }
+
+  el.innerHTML=history.map(function(h){
+    var isApply=h.decision==='apply';
+    var col=isApply?'var(--green)':'var(--muted)';
+    var icon=isApply?'&#x2705;':'&#x23F8;';
+
+    // Signal changes
+    var sigChanges=[];
+    if(isApply&&h.weightsApplied&&h.weightsBefore){
+      Object.keys(h.weightsApplied).forEach(function(k){
+        if(k==='bias') return;
+        var delta=(h.weightsApplied[k]||0)-(h.weightsBefore[k]||0);
+        if(Math.abs(delta)>=0.01) sigChanges.push({k:k,delta:delta});
+      });
+      sigChanges.sort(function(a,b){return Math.abs(b.delta)-Math.abs(a.delta);});
+    }
+
+    // Hit rate before vs after
+    var afterPreds=h.predIdAtTime?preds.filter(function(p){
+      return p.status!=='pending'&&p.outcome&&p.modelVerId&&p.modelVerId>=h.id;
+    }):[];
+    var beforePreds=preds.filter(function(p){
+      return p.status!=='pending'&&p.outcome&&(!p.modelVerId||p.modelVerId<h.id);
+    });
+    function calcRate(ps){
+      var h2=0,t=0;
+      ps.forEach(function(p){Object.values(p.outcome).forEach(function(v){t++;if(v==='hit')h2++;});});
+      return t>=3?Math.round(h2/t*100):null;
+    }
+    var rateAfter=calcRate(afterPreds);
+    var rateBefore=calcRate(beforePreds);
+    var rateDelta=rateAfter!==null&&rateBefore!==null?rateAfter-rateBefore:null;
+
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        +'<span style="font-size:13px">'+icon+'</span>'
+        +'<span style="font-size:12px;font-weight:700;color:'+col+'">'+(isApply?'Applied':'Held')+'</span>'
+        +'<span style="font-size:11px;color:var(--muted);margin-left:auto">'+h.date+'</span>'
+      +'</div>'
+      // Backtest result at decision time
+      +(h.btDiff!==null?'<div style="font-size:11px;color:var(--muted);margin-bottom:3px">'
+        +'Backtest at decision: '
+        +'<span style="color:'+(h.btDiff>0?'var(--green)':h.btDiff<0?'var(--red)':'var(--muted)')+';font-family:var(--mono);font-weight:700">'
+        +(h.btDiff>0?'\u2191+':h.btDiff<0?'\u2193':'\u2014')+h.btDiff+'%'
+        +'</span>'
+        +' over '+(h.btN||'?')+' refills'
+      +'</div>':'')
+      // Signal changes
+      +(sigChanges.length?'<div style="font-size:10px;color:var(--muted);margin-bottom:3px">'
+        +sigChanges.slice(0,3).map(function(s){
+          return '<span style="color:'+(s.delta>0?'var(--green)':'var(--red)')+'">'
+            +(SIGNAL_NAMES[s.k]||s.k)+' '+(s.delta>0?'\u2191':'\u2193')
+            +'</span>';
+        }).join(' \u00B7 ')
+      +'</div>':'')
+      // Hit rate before vs after
+      +(rateBefore!==null||rateAfter!==null?'<div style="font-size:11px;color:var(--muted)">'
+        +(rateBefore!==null?'Before: <span style="font-family:var(--mono);color:var(--text)">'+rateBefore+'%</span>':'')
+        +(rateAfter!==null?' \u00B7 After: <span style="font-family:var(--mono);color:'+(rateDelta>0?'var(--green)':rateDelta<0?'var(--red)':'var(--text)')+'">'+rateAfter+'%</span>':'')
+        +(rateDelta!==null?' <span style="color:'+(rateDelta>0?'var(--green)':rateDelta<0?'var(--red)':'var(--muted)')+'">'+(rateDelta>0?'\u2191+':'\u2193')+rateDelta+'%</span>':'')
+      +'</div>':'')
+    +'</div>';
+  }).join('');
+}
+
 function renderBestPredList(){
   var el=document.getElementById('best-pred-list');
   if(!el||!activeShop) return;
@@ -4765,23 +4889,66 @@ function renderBestPredList(){
 
 function backtestWeights(letter, weights, fromDate){
   // Score each refill from fromDate onward using given weights
-  // Returns {hits, total, hitRate, detail}
+  // Recent refills weighted more — exponential decay of 0.92 per step back
   db=loadDB();
   var entries=shopEntries(letter).slice().sort(function(a,b){return a.date.localeCompare(b.date);});
   var fromIdx=entries.findIndex(function(e){return e.date>fromDate;});
-  if(fromIdx<3) return null; // need training data before fromDate
-  var hits=0,total=0,detail=[];
+  if(fromIdx<3) return null;
+  var hits=0,total=0,weightedHits=0,weightedTotal=0,detail=[];
+  var n=entries.length-1-fromIdx; // total steps
   for(var i=fromIdx;i<entries.length-1;i++){
     var trainEntries=entries.slice(0,i);
     var actual=entries[i].codes;
-    // Score directly using provided weights — bypass getWeights/loadDB
     var scores=buildWeightedScoreDirect(trainEntries, weights);
     var top5=Object.entries(scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
     var h=top5.filter(function(c){return actual.indexOf(c)>-1;}).length;
+    // Recency weight: most recent step = 1.0, each step back decays by 0.92
+    var stepsFromEnd=entries.length-2-i;
+    var rw=Math.pow(0.92, stepsFromEnd);
     hits+=h; total+=top5.length;
-    detail.push({date:entries[i].date,hits:h,total:top5.length});
+    weightedHits+=h*rw; weightedTotal+=top5.length*rw;
+    detail.push({date:entries[i].date,hits:h,total:top5.length,rw:Math.round(rw*100)/100});
   }
-  return {hits:hits,total:total,hitRate:total?Math.round(hits/total*100):0,detail:detail};
+  var hitRate=total?Math.round(hits/total*100):0;
+  var weightedRate=weightedTotal>0?Math.round(weightedHits/weightedTotal*100):hitRate;
+  return {hits:hits,total:total,hitRate:weightedRate,rawHitRate:hitRate,detail:detail};
+}
+
+function buildSequentialCooccur(entries){
+  // For each code in refill N, score how often it appears in refill N+1
+  // Returns score per code representing "how likely to follow last refill's codes"
+  if(!entries||entries.length<4) return {};
+  var lastEntry=entries[entries.length-1];
+  var lastCodes=lastEntry?lastEntry.codes||[]:[];
+  if(!lastCodes.length) return {};
+
+  // Build transition counts: after seeing code A, how often does code B follow?
+  var transitions={}; // transitions[A][B] = count
+  for(var i=0;i<entries.length-1;i++){
+    var fromCodes=entries[i].codes||[];
+    var toCodes=entries[i+1].codes||[];
+    fromCodes.forEach(function(a){
+      if(!transitions[a]) transitions[a]={};
+      toCodes.forEach(function(b){
+        transitions[a][b]=(transitions[a][b]||0)+1;
+      });
+    });
+  }
+
+  // Score each code: sum of transition probabilities from last refill's codes
+  var scores={};
+  var allCodes=Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[]) ));
+  allCodes.forEach(function(b){
+    var score=0;
+    lastCodes.forEach(function(a){
+      if(transitions[a]&&transitions[a][b]){
+        var total=Object.values(transitions[a]).reduce(function(s,v){return s+v;},0);
+        score+=total>0?transitions[a][b]/total:0;
+      }
+    });
+    if(score>0) scores[b]=score/lastCodes.length;
+  });
+  return scores;
 }
 
 function buildWeightedScoreDirect(entries, weights){
@@ -4792,6 +4959,7 @@ function buildWeightedScoreDirect(entries, weights){
   var recency=buildWeightedScore(entries);
   var streaks=buildStreaks(entries);
   var cooccur=buildCooccurrence(entries);
+  var seqcooccur=buildSequentialCooccur(entries);
   var cycle=buildCycleScore(entries);
   var momentum=(buildMomentumScore(entries).scores)||{};
   var overdue=buildOverdueScore(entries);
@@ -4807,6 +4975,7 @@ function buildWeightedScoreDirect(entries, weights){
       (recency[c]||0)*w.recency+
       (streaks[c]||0)*w.streak+
       (cooccur[c]||0)*w.cooccur+
+      (seqcooccur[c]||0)*w.seqcooccur+
       (cycle[c]||0)*w.cycle+
       (momentum[c]||0)*w.momentum+
       (overdue[c]||0)*w.overdue+
