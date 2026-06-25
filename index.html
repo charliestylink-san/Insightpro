@@ -4356,6 +4356,23 @@ function renderPredictionCodes(result,entries,preds,frozenPred){
   var rawSnap=getSnapshotForPred(frozenPred);
   var snapByCode=decompressSnap(rawSnap,isCompact);
 
+  // Sort top5 by grade (A→B→C→D→N) then combinedPct within same grade
+  var gradeOrder={A:0,B:1,C:2,D:3,N:4};
+  top5Codes=top5Codes.slice().sort(function(a,b){
+    var aPct=Math.round((frozen[a]||0)/fullMax*100);
+    var bPct=Math.round((frozen[b]||0)/fullMax*100);
+    var aGrade=buildCodeConfidenceGrade(a,snapByCode[a]||{},weights,entries,preds,activeShop,aPct);
+    var bGrade=buildCodeConfidenceGrade(b,snapByCode[b]||{},weights,entries,preds,activeShop,bPct);
+    var aOrder=gradeOrder[aGrade.grade]!==undefined?gradeOrder[aGrade.grade]:5;
+    var bOrder=gradeOrder[bGrade.grade]!==undefined?gradeOrder[bGrade.grade]:5;
+    if(aOrder!==bOrder) return aOrder-bOrder;
+    var aHR=buildCodeHitRate(a,preds);
+    var bHR=buildCodeHitRate(b,preds);
+    var aCombined=aHR?Math.round(aPct*0.5+aHR.rate*0.5):aPct;
+    var bCombined=bHR?Math.round(bPct*0.5+bHR.rate*0.5):bPct;
+    return bCombined-aCombined;
+  });
+
   function frozenRow(c,type){
     var scorePct=Math.round((frozen[c]||0)/fullMax*100);
     var snap=snapByCode[c]||{};
