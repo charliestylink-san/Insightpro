@@ -1921,14 +1921,21 @@ var obsPenalty={idle:0,watching:30,recovering:20,confirmed:60,ambiguous:0}[obs.s
 var obsVal=Math.max(0,100-obsPenalty)/100;
 var momVal=Math.min(1,Math.max(0,snap.momentum||0.5));
 var w={consensus:0.25, threshold:0.30, bias:0.25, obs:0.15, momentum:0.05};
-var resolvedAll=preds.filter(function(p){return p.status!=='pending'&&p.outcome&&p.signalSnapshot;});
+var resolvedAll=preds.filter(function(p){
+  return p.status!=='pending'&&p.outcome&&
+    (p.signalSnapshot||p.frozenSnapshots||p.id);
+});
 if(resolvedAll.length>=5){
 var lifts={consensus:0,threshold:0,obs:0};
 var liftCounts={consensus:0,threshold:0,obs:0};
 resolvedAll.forEach(function(p){
 if(p.predictedCodes.indexOf(code)===-1) return;
 var isHit=p.outcome&&p.outcome[code]==='hit'?1:0;
-var pSnap=p.signalSnapshot&&p.signalSnapshot[code]||{};
+// Use frozenSnapshots (new format) or signalSnapshot (old format)
+var rawSnap=getSnapshotForPred(p);
+var isCompact=!!(p.frozenSnapshots&&p.modelVersion);
+var decompSnap=decompressSnap(rawSnap,isCompact);
+var pSnap=decompSnap[code]||p.signalSnapshot&&p.signalSnapshot[code]||{};
 var pWts=p.weightsAtTime||weights;
 var pCons=buildSignalConsensus(code,pSnap,pWts,pWts).score/100;
 lifts.consensus+=(isHit-0.5)*(pCons-0.5)*4;
@@ -3312,6 +3319,10 @@ db.shops[letter].predictions=resolvedPreds;
 db.shops[letter].lastFullScores=frozenScores;
 // Top-5 display scores (normalised 0-100)
 var top5Scores=top5.reduce(function(o,x){o[x[0]]=Math.round(x[1]/top5Max*100);return o;},{});
+// Freeze plain english summary and confidence at prediction time
+var top5CodesFreeze=top5.map(function(x){return x[0];});
+var frozenSummary=buildPlainEnglishSummary(entries,preds,top5CodesFreeze,result,letter)||'';
+var frozenConf=buildRefillConfidenceScore(entries,preds,top5CodesFreeze,result,letter)||null;
 var predId=Date.now();
 // Always save snapshot to external store \u2014 learner can analyze anytime
 saveSnapshot(predId,compactSnaps);
@@ -3334,6 +3345,8 @@ db.shops[letter].predictions.push({
   frozenScores:frozenScores,
   frozenSnapshots:embedInline?compactSnaps:null, // inline for recent, external store for all
   weightsAtTime:Object.assign({},result.weights),
+  frozenSummary:frozenSummary,
+  frozenConf:frozenConf,
   status:'pending',
   outcome:null,
   actualDate:null,
@@ -4091,41 +4104,60 @@ function handleImportFile(evt){
 function renderPredictTab(){
   if(!activeShop){
     ['signal-perf-panel','refill-confidence','plain-english','prediction-codes','pairs-panel']
-      .forEach(function(id){
-        var el=document.getElementById(id);
-        if(el) el.innerHTML='<div class="empty"><p>Select a shop</p></div>';
-      });
+      .forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML='<div class="empty"><p>Select a shop</p></div>';});
     return;
   }
   db=loadDB();
-  var entries=shopEntries(activeShop);
   var preds=shopPreds(activeShop);
-  if(entries.length<3){
-    ['signal-perf-panel','refill-confidence','prediction-codes','pairs-panel']
-      .forEach(function(id){
-        var el=document.getElementById(id);
-        if(el) el.innerHTML='<div class="empty"><p>Need 3+ entries</p></div>';
-      });
+  var entries=shopEntries(activeShop);
+
+  // Get frozen pending prediction — this is the ONLY source for PREDICT display
+  var pending=preds.filter(function(p){return p.status==='pending';});
+  var pred=pending.length?pending[pending.length-1]:null;
+
+  if(!pred||!pred.frozenScores||!Object.keys(pred.frozenScores).length){
+    ['refill-confidence','plain-english','prediction-codes']
+      .forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML='<div class="empty"><p>No prediction yet — run Rebuild</p></div>';});
+    document.getElementById('signal-perf-panel').innerHTML='';
+    document.getElementById('pairs-panel').innerHTML='';
+    renderLearnerAlert(activeShop);
     return;
   }
+
   try{
-    var result=buildCombinedScore(entries,preds,activeShop);
-    var scores=result.scores;
-    var snaps=result.snapshots;
-    var weights=result.weights;
-    if(!scores||!Object.keys(scores).length){
-      document.getElementById('prediction-codes').innerHTML=
-        '<div class="alert alert-warn">No scores for '+activeShop+' ('+entries.length+' entries, '+preds.length+' preds)</div>';
-      return;
-    }
-    renderSignalPerf(weights,preds,snaps,scores);
-    renderConfidenceScore(entries,preds,result);
-    renderPredictionCodes(result,entries,preds);
-    renderPairs(entries,scores);
+    // All display data comes from frozen prediction — no buildCombinedScore
+    var frozenScores=pred.frozenScores;
+    var weightsAtFreezeTime=pred.weightsAtTime||getWeights(activeShop);
+
+    // Decompress frozen snapshots for signal display
+    var isCompact=!!(pred.frozenSnapshots&&pred.modelVersion);
+    var rawSnap=getSnapshotForPred(pred);
+    var snapByCode=decompressSnap(rawSnap,isCompact);
+
+    // Signals — from frozen weights and analysis of resolved predictions only
+    renderSignalPerf(weightsAtFreezeTime,preds,snapByCode,frozenScores);
+
+    // Confidence — from frozen scores
+    renderConfidenceScore(entries,preds,{
+      scores:frozenScores,
+      snapshots:snapByCode,
+      weights:weightsAtFreezeTime,
+      regime:pred.regimeAtTime||null,
+      signalLifts:null
+    });
+
+    // Prediction codes — from frozen prediction only
+    renderPredictionCodes(null,entries,preds,pred);
+
+    // Pairs — from entries history (static analysis, no model recalc)
+    renderPairs(entries,frozenScores);
+
+    // Learner alert — background recommendation
     renderLearnerAlert(activeShop);
+
   }catch(e){
     var el=document.getElementById('prediction-codes');
-    if(el) el.innerHTML='<div class="alert alert-err">Predict error: '+e.message+'<br><small>'+activeShop+' · '+entries.length+' entries · '+preds.length+' preds</small></div>';
+    if(el) el.innerHTML='<div class="alert alert-err">Predict error: '+e.message+'</div>';
   }
 }
 
@@ -4181,8 +4213,12 @@ function renderSignalPerf(weights,preds,snaps,scores){
 function renderConfidenceScore(entries,preds,result){
   var el=document.getElementById('refill-confidence');
   if(!el) return;
-  var top5Codes=Object.entries(result.scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
-  var rcs=buildRefillConfidenceScore(entries,preds,top5Codes,result,activeShop);
+  // Use frozen confidence if available, otherwise compute from result
+  var rcs=result.frozenConf||null;
+  if(!rcs){
+    var top5Codes=Object.entries(result.scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
+    rcs=buildRefillConfidenceScore(entries,preds,top5Codes,result,activeShop);
+  }
   var adapted=rcs.adapted;
   el.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:8px">'
     +'<span style="font-size:28px;font-weight:900;font-family:var(--mono);color:'+rcs.col+'">'+rcs.score+'</span>'
@@ -4198,37 +4234,42 @@ function renderConfidenceScore(entries,preds,result){
   // Plain English
   var pe=document.getElementById('plain-english');
   if(pe){
-    var top5CodesForSummary=Object.entries(result.scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
-    var peText=buildPlainEnglishSummary(entries,preds,top5CodesForSummary,result,activeShop);
+    // Use frozen summary if available
+    var peText=result.frozenSummary||null;
+    if(!peText){
+      var top5CodesForSummary=Object.entries(result.scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
+      peText=buildPlainEnglishSummary(entries,preds,top5CodesForSummary,result,activeShop);
+    }
     pe.innerHTML=peText?'<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:6px">'+peText+'</div>':'';
   }
 }
 
-function renderPredictionCodes(result,entries,preds){
+function renderPredictionCodes(result,entries,preds,frozenPred){
   var el=document.getElementById('prediction-codes');
   if(!el) return;
 
-  var scores=result.scores;
-  var snaps=result.snapshots;
-  var weights=result.weights;
-  var fullMax=Math.max.apply(null,Object.values(scores).concat([0.001]));
+  if(!frozenPred||!frozenPred.frozenScores||!Object.keys(frozenPred.frozenScores).length){
+    el.innerHTML='<div class="empty"><p>No frozen prediction — run Rebuild</p></div>';
+    return;
+  }
 
-  var ranked=Object.entries(scores).sort(function(a,b){return b[1]-a[1];});
-  var top5=ranked.slice(0,5);
-  var top5Codes=top5.map(function(x){return x[0];});
-  // Build promotions via applyEmergentToTop3
-  var patterns=buildEmergentPatterns(entries,preds)||[];
-  var appliedResult=applyEmergentToTop3(top5.slice(),patterns,scores);
-  var promoted=appliedResult.promotions||[];
-  // Build watchouts: (entries, predictions, bcsResult, top5Codes, letter)
-  var watchouts=buildWatchouts(entries,preds,result,top5Codes,activeShop)||[];
+  var frozen=frozenPred.frozenScores;
+  var weights=frozenPred.weightsAtTime||{};
+  var fullMax=Math.max.apply(null,Object.values(frozen).concat([1]));
+  var top5Codes=frozenPred.predictedCodes||[];
+  var promoted=frozenPred.promotedCodes||[];
+  var watchouts=frozenPred.watchoutCodes||[];
 
-  var lt=db.shops[activeShop]&&db.shops[activeShop].learnedThresholds||null;
+  // Decompress frozen snapshots — these are the signal values at freeze time
+  var isCompact=!!(frozenPred.frozenSnapshots&&frozenPred.modelVersion);
+  var rawSnap=getSnapshotForPred(frozenPred);
+  var snapByCode=decompressSnap(rawSnap,isCompact);
 
-  function codeRow(c,type,scorePct){
-    var snap=snaps[c]||{};
+  function frozenRow(c,type){
+    var scorePct=Math.round((frozen[c]||0)/fullMax*100);
+    var snap=snapByCode[c]||{};
     var consensus=buildSignalConsensus(c,snap,weights,weights);
-    var topDriving=consensus.yesSignals.slice(0,2).map(function(k){return SIGNAL_NAMES&&SIGNAL_NAMES[k]||k;}).join(' &#xB7; ');
+    var topDriving=consensus.yesSignals.slice(0,2).map(function(k){return SIGNAL_NAMES&&SIGNAL_NAMES[k]||k;}).join(' \u00B7 ');
     var grade=buildCodeConfidenceGrade(c,snap,weights,entries,preds,activeShop,scorePct);
     var typeIcon=type==='top5'?'':type==='promoted'?'&#x1F52C;':type==='watchout'?'&#x26A0;&#xFE0F;':'&#x1F3AF;';
     var col=type==='top5'?'var(--text)':type==='promoted'?'var(--green)':type==='watchout'?'var(--gold)':'var(--teal)';
@@ -4245,33 +4286,17 @@ function renderPredictionCodes(result,entries,preds){
   }
 
   var html='';
-
-  // Top-5
-  html+=top5.map(function(x){
-    var pct=Math.round(x[1]/fullMax*100);
-    return codeRow(x[0],'top5',pct);
-  }).join('');
-
-  // Promoted
-  var promoExtra=promoted.filter(function(p){return top5Codes.indexOf(p.promoted)===-1;});
+  html+=top5Codes.map(function(c){return frozenRow(c,'top5');}).join('');
+  var promoExtra=promoted.filter(function(c){return top5Codes.indexOf(c)===-1;});
   if(promoExtra.length){
     html+='<div class="pred-divider"></div>';
-    html+=promoExtra.map(function(p){
-      var pct=Math.round((scores[p.promoted]||0)/fullMax*100);
-      return codeRow(p.promoted,'promoted',pct);
-    }).join('');
+    html+=promoExtra.map(function(c){return frozenRow(c,'promoted');}).join('');
   }
-
-  // Watchouts
-  var wExtra=watchouts.filter(function(w){return top5Codes.indexOf(w.code)===-1&&promoExtra.indexOf(w)===-1;});
-  if(wExtra.length){
+  var watchExtra=watchouts.filter(function(c){return top5Codes.indexOf(c)===-1&&promoExtra.indexOf(c)===-1;});
+  if(watchExtra.length){
     html+='<div class="pred-divider"></div>';
-    html+=wExtra.map(function(w){
-      var pct=Math.round((scores[w.code]||0)/fullMax*100);
-      return codeRow(w.code,'watchout',pct);
-    }).join('');
+    html+=watchExtra.map(function(c){return frozenRow(c,'watchout');}).join('');
   }
-
   el.innerHTML=html||'<div class="empty"><p>No prediction available</p></div>';
 }
 
@@ -4686,7 +4711,7 @@ function buildWeightedScoreDirect(entries, weights){
   var momentum=(buildMomentumScore(entries).scores)||{};
   var overdue=buildOverdueScore(entries);
   var interval=buildIntervalRegularity(entries);
-  var dow=buildDayOfWeekScore(entries);
+  var dow=buildDowPattern(entries);
   var qty=buildQtyDominance(entries);
   var qtyStreak=buildQtyStreak(entries);
   var allCodes=Array.from(new Set(entries.reduce(function(a,e){return a.concat(e.codes);},[]) ));
