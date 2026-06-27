@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Insight</title>
+<meta name="theme-color" content="#1a1a2e">
+<title>Insight3</title>
 <style>
+
+
 /* ── TOKENS ── */
 :root{
 --bg:        #0a0a0f;
@@ -208,6 +211,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 .red{color:var(--red)}
 .accent{color:var(--accent)}
 hr.divider{border:none;border-top:1px solid var(--border);margin:10px 0}
+
+
 </style>
 </head>
 <body>
@@ -234,6 +239,7 @@ hr.divider{border:none;border-top:1px solid var(--border);margin:10px 0}
         <button class="btn btn-primary btn-sm" onclick="saveToiCloud()">☁️ Save to iCloud</button>
         <button class="btn btn-secondary btn-sm" onclick="exportFullBackup()">📤 Export JSON</button>
         <button class="btn btn-secondary btn-sm" onclick="triggerImport()">📥 Import JSON</button>
+        <button class="btn btn-danger btn-sm" onclick="clearAllData()">🗑️ Clear All Data</button>
       </div>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImportFile(event)">
       <div id="backup-result"></div>
@@ -422,16 +428,28 @@ hr.divider{border:none;border-top:1px solid var(--border);margin:10px 0}
 </div>
 
 <div id="toast"></div>
+<script>
 
-<script>
+// Display function stubs — overridden by display script at runtime
+var updateAllBanners=function(){};
+var renderShopPills=function(){};
+var renderArchive=function(){};
+var renderDataTab=function(){};
+var renderPredictTab=function(){};
+var renderTrackTab=function(){};
+var renderLearnerAlert=function(){};
+var initApp=function(){};
+
+// ENGINE + UTILITIES (original, display fns removed)
+
 var DB_KEY='inv_intel_v4', DB_BAK='inv_intel_bak', AK_KEY='inv_intel_apikey';
-</script>
-<script>
+
+
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // ENGINE \u2014 all signal, scoring, learning, and data functions
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-</script>
-<script>
+
+
 // \u2500\u2500 CONSTANTS \u2500\u2500
 
 
@@ -1583,30 +1601,62 @@ function detectRegimeShift(entries){
 var n = entries.length;
 if(n < 8) return {shifting:false, overlapScore:1, note:'Insufficient data'};
 var sorted = entries.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
-var w = Math.min(MOMENTUM_WINDOW, Math.floor(n/2));
+
+// Adaptive recent window: ~25% of history, min 5, max 15
+// Larger shops need wider window to avoid noise
+var w = Math.max(5, Math.min(15, Math.round(n * 0.25)));
 var recent    = sorted.slice(n-w);
-var historical= sorted;
-function topCodes(set, topN){
-var freq={};
-set.forEach(function(e){e.codes.forEach(function(c){freq[c]=(freq[c]||0)+1;});});
-return Object.entries(freq).sort(function(a,b){return b[1]-a[1];}).slice(0,topN).map(function(x){return x[0];});
+var prior     = sorted.slice(0, n-w); // everything before recent
+
+// Adaptive topN: how many codes appear in >20% of refills (meaningful codes)
+// This lets the shop's own density decide, not a fixed number
+function freqMap(set){
+  var freq={};
+  set.forEach(function(e){e.codes.forEach(function(c){freq[c]=(freq[c]||0)+1;});});
+  return freq;
 }
-var topN = Math.min(8, Math.ceil(n/3));
-var recentTop = topCodes(recent, topN);
-var histTop   = topCodes(historical, topN);
+var allFreq = freqMap(sorted);
+var meaningful = Object.keys(allFreq).filter(function(c){return allFreq[c]/n >= 0.20;});
+var topN = Math.max(4, Math.min(meaningful.length || 8, 12));
+
+function topCodes(set, freq, refN){
+  return Object.entries(freq)
+    .filter(function(x){return x[1]/refN >= 0.15;}) // appear in at least 15% of that window
+    .sort(function(a,b){return b[1]-a[1];})
+    .slice(0, topN)
+    .map(function(x){return x[0];});
+}
+var recentFreq = freqMap(recent);
+var priorFreq  = freqMap(prior.length ? prior : sorted);
+var recentTop  = topCodes(recent, recentFreq, recent.length);
+var histTop    = topCodes(prior.length ? prior : sorted, priorFreq, prior.length || n);
+
+// Adaptive shift threshold: based on this shop's historical volatility
+// Compute overlap between consecutive halves of history to get baseline volatility
+var half = Math.floor(n/2);
+var h1freq = freqMap(sorted.slice(0, half));
+var h2freq = freqMap(sorted.slice(half));
+var h1top  = Object.keys(h1freq).sort(function(a,b){return h2freq[b]-h2freq[a];}).slice(0,topN);
+var h2top  = Object.keys(h2freq).sort(function(a,b){return h2freq[b]-h2freq[a];}).slice(0,topN);
+var baselineOverlap = h1top.filter(function(c){return h2top.indexOf(c)>-1;}).length / Math.max(topN,1);
+// Shift threshold = baseline overlap - 1 stddev (shops that naturally vary need higher tolerance)
+var shiftThreshold = Math.max(0.40, Math.min(0.70, baselineOverlap - 0.15));
+
 var overlap = recentTop.filter(function(c){return histTop.indexOf(c)>-1;}).length;
-var overlapScore = overlap / topN;
-var shifting = overlapScore < 0.6;
+var overlapScore = recentTop.length ? overlap / recentTop.length : 1;
+var shifting = overlapScore < shiftThreshold;
 var emerging = recentTop.filter(function(c){return histTop.indexOf(c)===-1;});
 var fading   = histTop.filter(function(c){return recentTop.indexOf(c)===-1;});
 var note = shifting
-? 'Pattern shift detected \u2014 '+(emerging.length?emerging.join(', ')+' emerging':'new codes rising')
-+(fading.length?' &#xB7; '+fading.join(', ')+' fading':'')
-+'. Recency and momentum prioritised.'
-: 'Stable \u2014 recent pattern consistent with history ('+Math.round(overlapScore*100)+'% overlap).';
-return {shifting:shifting, overlapScore:overlapScore,
-recentDominant:recentTop, historicalDominant:histTop,
-emerging:emerging, fading:fading, note:note};
+  ? 'Pattern shift detected \u2014 '+(emerging.length?emerging.join(', ')+' emerging':'new codes rising')
+    +(fading.length?' \u00B7 '+fading.join(', ')+' fading':'')
+    +'. Recent signals weighted more heavily.'
+  : 'Stable \u2014 recent pattern consistent with history ('+Math.round(overlapScore*100)+'% overlap).';
+return {shifting:shifting, overlapScore:overlapScore, shiftThreshold:shiftThreshold,
+  recentWindow:w, topN:topN,
+  periodStartDate:sorted.length>=w?sorted[sorted.length-w].date:sorted[0].date,
+  recentDominant:recentTop, historicalDominant:histTop,
+  emerging:emerging, fading:fading, note:note};
 }
 
 function buildHistoricalSimilarity(entries, topN){
@@ -2361,16 +2411,19 @@ resolved.forEach(function(p,idx){
   });
   // Surprise codes \u2014 signal was there but model missed them
   var surprises=p.surpriseCodes||(p.actualCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;});
-  surprises.forEach(function(c){
-    SIGNAL_KEYS.forEach(function(k){
-      if(k==='bias') return;
-      var v=sv(c,k); if(v===null) return;
-      // Surprise arrived = hit=1 but model didn't predict it
-      var st=sigStats[k];
-      if(v>=0.6){st.highHits+=1*rw*0.7;st.highTotal+=rw*0.7;}
-      else if(v<=0.35){st.lowHits+=1*rw*0.7;st.lowTotal+=rw*0.7;}
+    // Surprise codes — appeared but not predicted
+    // Full weight: a code that appeared IS the ground truth
+    // Regime-weighted: stable surprises are stronger learning signal
+    var surpriseRegW=p.regimeAtTime&&p.regimeAtTime.shifting?0.7:1.0;
+    surprises.forEach(function(c){
+      SIGNAL_KEYS.forEach(function(k){
+        if(k==='bias') return;
+        var v=sv(c,k); if(v===null) return;
+        var st=sigStats[k];
+        if(v>=0.6){st.highHits+=1*rw*surpriseRegW;st.highTotal+=rw*surpriseRegW;}
+        else if(v<=0.35){st.lowHits+=1*rw*surpriseRegW;st.lowTotal+=rw*surpriseRegW;}
+      });
     });
-  });
 });
 
 // Compute lift per signal
@@ -2427,24 +2480,100 @@ var missedOpportunities=Object.keys(surpriseFreq)
   .sort(function(a,b){return b.missCount-a.missCount;})
   .slice(0,5);
 
-// \u2500\u2500 Q3: Build optimal weights from \u2460+\u2461 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-// Start from current/anchor weights.
-// Boost signals that are predictive (from \u2460).
-// Boost signals that were high for missed codes (from \u2461).
-// Reduce signals that are counter-predictive.
-var optimalWeights=buildOptimalWeights(letter, sigEffectiveness, missedOpportunities, preds);
-
-// \u2500\u2500 Q4: Store performance summary \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ── REGIME-PERIOD SEGMENTATION ────────────────────────────────────────────────
+// Compute missed opportunities within CURRENT regime period separately.
+// Answers: what is the model missing RIGHT NOW in the current pattern?
+var shopEntries3=shopEntries(letter).slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+var currentRegime3=detectRegimeShift(shopEntries3);
+var periodStart3=currentRegime3.periodStartDate||null;
+var periodResolved=periodStart3
+  ?resolved.filter(function(p){return (p.actualDate||p.createdDate||'')>=periodStart3;})
+  :[];
+var periodMissedOpps=[];
+var periodSigStats=null;
+if(periodResolved.length>=2){
+  var pSurpriseFreq={};
+  var pSurpriseSig={};
+  var pSigStats={};
+  SIGNAL_KEYS.forEach(function(k){pSigStats[k]={highHits:0,highTotal:0,lowHits:0,lowTotal:0};});
+  periodResolved.forEach(function(p){
+    var isC=!!(p.frozenSnapshots&&p.modelVersion);
+    var rawSnap=getSnapshotForPred(p);
+    var snapD=decompressSnap(rawSnap,isC);
+    function pv(c,k){var s=snapD[c];return s&&s[k]!=null?s[k]:null;}
+    p.predictedCodes.forEach(function(c){
+      var isHit=p.outcome[c]==='hit'?1:0;
+      SIGNAL_KEYS.forEach(function(k){
+        if(k==='bias') return;
+        var v=pv(c,k); if(v===null) return;
+        if(v>=0.6){pSigStats[k].highHits+=isHit;pSigStats[k].highTotal+=1;}
+        else if(v<=0.35){pSigStats[k].lowHits+=isHit;pSigStats[k].lowTotal+=1;}
+      });
+    });
+    var surprises=p.surpriseCodes||(p.actualCodes||[]).filter(function(c){return p.predictedCodes.indexOf(c)===-1;});
+    surprises.forEach(function(c){
+      pSurpriseFreq[c]=(pSurpriseFreq[c]||0)+1;
+      if(!pSurpriseSig[c]) pSurpriseSig[c]={};
+      var sSnap=snapD[c]||(p.surpriseSnapshot&&p.surpriseSnapshot[c]);
+      if(!sSnap) return;
+      SIGNAL_KEYS.forEach(function(k){
+        pSurpriseSig[c][k]=(pSurpriseSig[c][k]||0)+(sSnap[k]!=null?sSnap[k]:0);
+      });
+    });
+  });
+  periodSigStats={};
+  SIGNAL_KEYS.forEach(function(k){
+    var st=pSigStats[k];
+    var hrH=st.highTotal>0?st.highHits/st.highTotal:null;
+    var hrL=st.lowTotal>0?st.lowHits/st.lowTotal:null;
+    periodSigStats[k]={lift:hrH!==null&&hrL!==null?hrH-hrL:null,n:st.highTotal+st.lowTotal};
+  });
+  periodMissedOpps=Object.keys(pSurpriseFreq)
+    .filter(function(c){return pSurpriseFreq[c]>=1;})
+    .map(function(c){
+      var strengths=pSurpriseSig[c]||{};
+      var count=pSurpriseFreq[c];
+      var topSignals=Object.keys(strengths)
+        .map(function(k){return {k:k,avg:strengths[k]/count};})
+        .filter(function(s){return s.avg>=0.4;})
+        .sort(function(a,b){return b.avg-a.avg;})
+        .slice(0,3);
+      return {code:c,missCount:count,topSignals:topSignals,inCurrentPeriod:true};
+    })
+    .sort(function(a,b){return b.missCount-a.missCount;})
+    .slice(0,5);
+}
+// Blend full-history signal effectiveness with period signal effectiveness
+// Period weight scales with how many period predictions exist (max 70% at 7+)
+var blendedSigEff=Object.assign({},sigEffectiveness);
+if(periodSigStats&&periodResolved.length>=3){
+  var periodWeight=Math.min(0.7,periodResolved.length/10);
+  SIGNAL_KEYS.forEach(function(k){
+    var full=sigEffectiveness[k]||{lift:null};
+    var period=periodSigStats[k]||{lift:null};
+    if(full.lift!==null&&period.lift!==null){
+      blendedSigEff[k]=Object.assign({},full,{
+        lift:full.lift*(1-periodWeight)+period.lift*periodWeight,
+        periodLift:period.lift,periodN:period.n
+      });
+    }
+  });
+}
+var effectiveMissed=periodMissedOpps.length>0?periodMissedOpps:missedOpportunities;
+var optimalWeights=buildOptimalWeights(letter, blendedSigEff, effectiveMissed, preds);
+// Q4: Store performance summary
 var totalH=0,totalP=0;
 resolved.forEach(function(p){Object.values(p.outcome).forEach(function(v){totalP++;if(v==='hit')totalH++;});});
 var last5=resolved.slice(-5),prior5=resolved.slice(-10,-5);
-
 var l5Rate=bRate(last5),p5Rate=bRate(prior5);
 var trending=l5Rate!==null&&p5Rate!==null?(l5Rate-p5Rate>0.05?'improving':l5Rate-p5Rate<-0.05?'declining':'stable'):'insufficient';
-
 return {
   sigEffectiveness:sigEffectiveness,
   missedOpportunities:missedOpportunities,
+  periodMissedOpps:periodMissedOpps,
+  periodResolved:periodResolved.length,
+  periodStart:periodStart3,
+  currentRegime:currentRegime3,
   optimalWeights:optimalWeights,
   trending:trending,
   hitRate:totalP>0?totalH/totalP:0,
@@ -2474,16 +2603,46 @@ SIGNAL_KEYS.forEach(function(k){
 });
 
 // From Q2: boost signals that consistently pointed at missed codes
+// Boost scales proportionally with missCount — no fixed threshold
 missed.forEach(function(m){
+  var boost=0.02*m.missCount; // linear: more misses = stronger boost
   m.topSignals.forEach(function(s){
-    if(s.avg>=0.6){
-      // This signal was high when the missed code arrived \u2014 it's underweighted
-      optW[s.k]=Math.min(0.45,(optW[s.k]||DEFAULT_WEIGHTS[s.k])+0.015*m.missCount);
+    if(s.avg>=0.5){ // lower signal threshold — don't require 0.6
+      optW[s.k]=Math.min(0.45,(optW[s.k]||DEFAULT_WEIGHTS[s.k])+boost);
     }
   });
 });
 
 return normaliseWeights(optW);
+}
+
+function precomputeAnchorCache(letter, currentW){
+  // Called by Learner — never by display functions
+  // Pre-computes btCache for top anchors so renderBestPredList reads cache only
+  db=loadDB();
+  var preds=shopPreds(letter);
+  var candidates=preds.filter(function(p){
+    return p.status!=='pending'&&p.outcome&&p.weightsAtTime&&!p.btCache;
+  }).sort(function(a,b){
+    var ha=0,ta=0,hb=0,tb=0;
+    Object.values(a.outcome).forEach(function(v){ta++;if(v==='hit')ha++;});
+    Object.values(b.outcome).forEach(function(v){tb++;if(v==='hit')hb++;});
+    return (tb?hb/tb:0)-(ta?ha/ta:0);
+  }).slice(0,5);
+  var w=currentW||getWeights(letter);
+  candidates.forEach(function(p){
+    var fromDate=p.actualDate||p.createdDate;
+    var anchorBT=backtestWeights(letter,p.weightsAtTime,fromDate);
+    var currentBT=backtestWeights(letter,w,fromDate);
+    if(anchorBT&&currentBT){
+      db=loadDB();
+      var dbPred=db.shops[letter].predictions.find(function(q){return q.id===p.id;});
+      if(dbPred){
+        dbPred.btCache={rate:anchorBT.hitRate,n:anchorBT.detail.length,diff:anchorBT.hitRate-currentBT.hitRate};
+        saveDB(db);
+      }
+    }
+  });
 }
 
 function runBackgroundLearner(letter){
@@ -2511,12 +2670,27 @@ var sorted=entries.slice().sort(function(a,b){return a.date.localeCompare(b.date
 var modelHistory=db.shops[letter].modelHistory||[];
 var lastApply=modelHistory.filter(function(v){return v.decision==='apply';}).slice(-1)[0];
 var btFromDate=lastApply?lastApply.date:(resolved.length>0?resolved[0].createdDate:sorted[0].date);
+// Full-history backtest (Insight2 behaviour — baseline)
 var btLearned=backtestWeights(letter,learnedW,btFromDate);
 var btCurrent=backtestWeights(letter,currentW,btFromDate);
 var TEST_N=btLearned?btLearned.detail.length:resolved.length;
 var currentHits=btCurrent?Math.round(btCurrent.hitRate*TEST_N/100):0;
 var learnedHits=btLearned?Math.round(btLearned.hitRate*TEST_N/100):0;
 var hitGain=learnedHits-currentHits;
+// ── INSIGHT3: Within-period backtest ─────────────────────────────────────────
+// Run a second backtest restricted to the current regime period.
+// More signal about what's working NOW — but lower N so needs corroboration.
+var periodStart3=analysis&&analysis.periodStart||null;
+var btPeriodLearned=periodStart3?backtestWeights(letter,learnedW,btFromDate,periodStart3):null;
+var btPeriodCurrent=periodStart3?backtestWeights(letter,currentW,btFromDate,periodStart3):null;
+var periodN=btPeriodLearned?btPeriodLearned.detail.length:0;
+var periodDiff=btPeriodLearned&&btPeriodCurrent
+  ?btPeriodLearned.hitRate-btPeriodCurrent.hitRate:null;
+// Combined verdict: full-history delta + period delta must agree for alert
+// If they disagree, hold — not enough evidence
+var periodAgreesWithFull=periodDiff===null
+  ||(periodDiff>0&&hitGain>0)
+  ||(periodDiff<=0&&hitGain<=0);
 // Accumulate snapshot — weighted by current regime
 var regimeCurrent=detectRegimeShift(sorted);
 var snapRegimeW=regimeCurrent.shifting?0.6:1.0; // stable predictions count more
@@ -2553,9 +2727,9 @@ var hitRateDecline=analysis.trending==="declining"&&
 // btDiff <= 0 = new model doesn't improve → hold
 var btPositive=btLearned&&btCurrent&&(btLearned.hitRate-btCurrent.hitRate)>0;
 var btDiffVal=btLearned&&btCurrent?btLearned.hitRate-btCurrent.hitRate:null;
-
-// shouldUpdate: backtest positive AND consistent signal AND meaningful improvement
-var shouldUpdate=btPositive&&hitGain>0&&consistent;
+// Insight3: shouldUpdate requires BOTH full-history AND period to agree
+// If period has no data yet, fall back to full-history only
+var shouldUpdate=btPositive&&hitGain>0&&consistent&&periodAgreesWithFull;
 
 // Learner decides its own readiness to surface — no hardcoded N
 // Cross-checks internal evidence against backtest result:
@@ -2604,16 +2778,23 @@ if(!shouldUpdate||sameModel||!readyToSurface){
       currentHits:currentHits,learnedHits:learnedHits,testN:TEST_N,
       btAnchorRate:btLearned?btLearned.hitRate:null,
       btCurrentRate:btCurrent?btCurrent.hitRate:null,
-      btDiff:btDiffVal,btN:TEST_N,
+      btDiff:btDiffVal,btN:TEST_N,btPeriodDiff:periodDiff,btPeriodN:periodN,periodAgreement:periodAgreesWithFull,
       currentTop5:curT5Early,learnedTop5:curT5Early,
       learnedOnly:[],currentOnly:[],
       topBoost:[],topReduce:[],
       learnedW:learnedW,prevW:currentW,
-      missedOpportunities:(analysis.missedOpportunities||[]).slice(0,3)
+      missedOpportunities:(analysis.missedOpportunities||[]).slice(0,3),
+      periodMissedOpps:(analysis.periodMissedOpps||[]).slice(0,3),
+      periodResolved:analysis.periodResolved||0,
+      periodStart:analysis.periodStart||null
     };
   }
   updateCodeLifts(letter,preds,db);
+  // Save performanceAnalysis NOW before precomputeAnchorCache reloads db
+  db.shops[letter].performanceAnalysis=analysis;
   saveDB(db);
+  // Pre-compute anchor backtests regardless of surfacing decision
+  precomputeAnchorCache(letter,currentW);
   if(activeTab==="predict") renderLearnerAlert(letter);
   return;
 }
@@ -2643,18 +2824,39 @@ db.shops[letter].learnerAlert={
   currentHits:currentHits,learnedHits:learnedHits,testN:TEST_N,
   btAnchorRate:btLearned?btLearned.hitRate:null,
   btCurrentRate:btCurrent?btCurrent.hitRate:null,
-  btDiff:btDiff,btN:TEST_N,
+  btDiff:btDiff,btN:TEST_N,btPeriodDiff:periodDiff,btPeriodN:periodN,periodAgreement:periodAgreesWithFull,
   learnedTop5:lT5,currentTop5:curT5,
   learnedOnly:lT5.filter(function(c){return curT5.indexOf(c)===-1;}),
   currentOnly:curT5.filter(function(c){return lT5.indexOf(c)===-1;}),
   topBoost:sigChanges.filter(function(s){return s.delta>0.02;}).slice(0,2),
   topReduce:sigChanges.filter(function(s){return s.delta<-0.02;}).slice(0,2),
   learnedW:learnedW,prevW:currentW,
-  missedOpportunities:(analysis.missedOpportunities||[]).slice(0,3)
+  missedOpportunities:(analysis.missedOpportunities||[]).slice(0,3),
+  periodMissedOpps:(analysis.periodMissedOpps||[]).slice(0,3),
+  periodResolved:analysis.periodResolved||0,
+  periodStart:analysis.periodStart||null
 };
 updateCodeLifts(letter,preds,db);
+
+// Save performanceAnalysis and learnerAlert before precomputeAnchorCache reloads db
+db.shops[letter].performanceAnalysis=analysis;
 saveDB(db);
-if(activeTab==="predict") renderLearnerAlert(letter);
+
+// Pre-compute anchor backtests for Optimize section — display reads cache only
+precomputeAnchorCache(letter,currentW);
+
+// Reload db after precomputeAnchorCache, then apply final updates
+db=loadDB();
+// Obs penalty relief: identify chronic misses and include in learnerAlert
+var totalPreds=(db.shops[letter].predictions||[]).filter(function(p){return p.status!=='pending'&&p.outcome;}).length;
+var chronicThreshold=Math.max(2, Math.round(totalPreds*0.15));
+var chronicMisses=(analysis.missedOpportunities||[]).filter(function(m){return m.missCount>=chronicThreshold;});
+if(chronicMisses.length&&db.shops[letter].learnerAlert){
+  db.shops[letter].learnerAlert.proposedRelief=chronicMisses.map(function(m){return m.code;});
+}
+
+saveDB(db);
+if(activeTab==='predict') renderLearnerAlert(letter);
 }
 function updateCodeLifts(letter,preds,db){
 var codeLifts=db.shops[letter].codeSignalLifts||{};
@@ -2750,10 +2952,11 @@ preds.forEach(function(p,idx){
       if(LIFT_EXCLUDE.indexOf(k)>-1) return;
       var sv=snap[k]||0;
       if(sv>0){
-        // Surprise: signal was high but code wasn't predicted &#x2192; boost that signal
-        // Weighted 0.7\u00D7 since model didn't act on it (less certain than confirmed pred)
-        sigLift[k]+=(0.5)*(sv-0.5)*4*recWeight*0.7;
-        sigCount[k]+=recWeight*0.7;
+        // Surprise: appeared but not predicted — full weight, definitive signal
+        // Regime-weighted: stable surprises count more than shift surprises
+        var regW=p.regimeAtTime&&p.regimeAtTime.shifting?0.7:1.0;
+        sigLift[k]+=(0.5)*(sv-0.5)*4*recWeight*regW;
+        sigCount[k]+=recWeight*regW;
       }
     });
   });
@@ -3146,20 +3349,6 @@ if(bak&&bak.shops&&Object.keys(bak.shops).length){
 localStorage.setItem(DB_KEY,JSON.stringify(bak));
 return bak;
 }
-var oldKeys=['inv_intel_v3','inv_intel_v2','inv_intel_v1'];
-for(var i=0;i<oldKeys.length;i++){
-try{
-var old=JSON.parse(localStorage.getItem(oldKeys[i]));
-if(old&&old.shops&&Object.keys(old.shops).length){
-Object.keys(old.shops).forEach(function(c){
-if(!old.shops[c].predictions) old.shops[c].predictions=[];
-});
-localStorage.setItem(DB_KEY,JSON.stringify(old));
-localStorage.setItem(DB_BAK,JSON.stringify(old));
-return old;
-}
-}catch(e2){}
-}
 return {shops:{}};
 }catch(e){ return {shops:{}}; }
 }
@@ -3200,7 +3389,8 @@ var resolveResult=autoResolve(letter,date,codes);
 shopData(letter).entries.push({id:Date.now(),date:date,codes:codes,source:source});
 shopData(letter).entries.sort(function(a,b){return a.date.localeCompare(b.date);});
 saveDB(db);
-autoSavePrediction(letter);
+// NO autoSavePrediction here — PREDICT stays frozen until Rebuild
+// Learner runs in background to analyse the new resolved prediction
 renderShopPills();
 updateAllBanners();
 return resolveResult;
@@ -3307,6 +3497,85 @@ setTimeout(function(){learnAndStoreThresholds(letter);},100);
 return {hadPrediction:hadPrediction,resolved:resolvedPreds,worstStatus:resolvedPreds.length?resolvedPreds[0].status:null};
 }
 
+// Sort codes by grade (A→N) then effectivePct — called at freeze time so display order is fixed
+// effectivePct = signal strength × regime certainty × shop confidence × obs health
+// This is an honest expected-hit probability, not just a ranking number
+function sortCodesByGrade(codes, frozenScores, snapByCode, weights, entries, preds, letter, shopConf, regime){
+  var gradeOrder={A:0,B:1,C:2,D:3,N:4};
+  var fullMax=Math.max.apply(null,Object.values(frozenScores).concat([1]));
+  // Shop confidence: use passed value or compute from recent resolved
+  var conf=shopConf!==undefined?shopConf:0.5;
+  // Regime certainty: stable=1.0, shifting scales down by how much it's shifted
+  var regimeCertainty=1.0;
+  if(regime&&regime.shifting){
+    // overlapScore of 0.4 = 40% certain = 0.4 certainty multiplier, floor at 0.5
+    regimeCertainty=Math.max(0.50, regime.overlapScore!==undefined?regime.overlapScore:0.70);
+  }
+  var obsWindow=letter&&db&&db.shops&&db.shops[letter]&&db.shops[letter].obsWindow
+    ?db.shops[letter].obsWindow:{};
+  var codeData={};
+  codes.forEach(function(c){
+    var pct=Math.round((frozenScores[c]||0)/fullMax*100);
+    var snap=snapByCode[c]||{};
+    var grade=buildCodeConfidenceGrade(c,snap,weights,entries,preds,letter,pct);
+    var hr=buildCodeHitRate(c,preds);
+    var hrBlend=hr?Math.round(pct*0.5+hr.rate*0.5):pct;
+    var consensus=buildSignalConsensus(c,snap,weights,weights);
+    var topDriving=consensus.yesSignals.slice(0,2).map(function(k){return SIGNAL_NAMES&&SIGNAL_NAMES[k]||k;}).join(' \u00B7 ');
+    var obsRaw=obsWindow[c]||{state:'idle'};
+    var obsState=obsRaw.state||'idle';
+    // Obs health multiplier
+    var obsHealth={idle:1.0,watching:0.90,recovering:1.0,confirmed:0.80,overdue:1.10,ambiguous:0.95}[obsState]||1.0;
+    // Obs health multiplier — confirmed = boost, watching = mild boost, overdue = boost
+    var obsHealth={
+      idle:      1.00,
+      watching:  1.08,
+      recovering:1.00,
+      confirmed: 1.15,
+      overdue:   1.12,
+      ambiguous: 0.95
+    }[obsState]||1.00;
+    var obsRaw2=obsWindow[c]||{};
+    if(obsRaw2.penaltyApplied&&obsRaw2.penaltyApplied<=0.60){
+      obsHealth=Math.min(obsHealth,0.85);
+    }
+    // ── INSIGHT3: True effectivePct ──────────────────────────────────────────
+    // Incorporates signal strength + obs health + regime certainty + shop confidence
+    // Formula: code signal × obsHealth, then scaled by (regime × shopConf)
+    // Two-step to keep numbers readable:
+    //   Step 1: codeScore = hrBlend × obsHealth (0-100, per-code)
+    //   Step 2: scale = regimeCertainty × clampedConf (0.25-1.0)
+    //   effectivePct = codeScore × scale, floored at 5% so no code vanishes
+    // The displayed number is an honest expected hit contribution
+    var codeScore=hrBlend*obsHealth;
+    var clampedConf=Math.max(0.40, conf); // floor at 40% — even uncertain shops have signal
+    var scale=regimeCertainty*clampedConf;
+    // Preserve relative ranking: scale compresses the range, not the order
+    // Use sqrt of scale so a 0.5 certainty gives 0.71× not 0.50× — less crushing
+    var effectivePct=Math.round(codeScore*Math.sqrt(scale));
+    effectivePct=Math.max(5, Math.min(100, effectivePct));
+    codeData[c]={
+      pct:pct, combined:hrBlend, effectivePct:effectivePct,
+      grade:grade.grade, gradeCol:grade.col, adapted:!!grade.adapted,
+      hrRate:hr?hr.rate:null, hrN:hr?hr.predicted:null,
+      topDriving:topDriving,
+      topSignalKey:consensus.yesSignals[0]||null,
+      obsState:obsState,
+      regimeCertainty:Math.round(regimeCertainty*100),
+      shopConf:Math.round(conf*100)
+    };
+  });
+  var sorted=codes.slice().sort(function(a,b){
+    var aOrder=gradeOrder[codeData[a].grade]!==undefined?gradeOrder[codeData[a].grade]:5;
+    var bOrder=gradeOrder[codeData[b].grade]!==undefined?gradeOrder[codeData[b].grade]:5;
+    if(aOrder!==bOrder) return aOrder-bOrder;
+    return codeData[b].effectivePct-codeData[a].effectivePct;
+  });
+  lastSortCodeData=codeData;
+  return sorted;
+}
+var lastSortCodeData={};
+
 function autoSavePrediction(letter){
 db=loadDB();
 // Clear stale per-code lifts if signal version changed
@@ -3354,12 +3623,14 @@ db.shops[letter].predictions=resolvedPreds;
 db.shops[letter].lastFullScores=frozenScores;
 // Top-5 display scores (normalised 0-100)
 var top5Scores=top5.reduce(function(o,x){o[x[0]]=Math.round(x[1]/top5Max*100);return o;},{});
-// Freeze plain english summary and confidence at prediction time
-var top5CodesFreeze=top5.map(function(x){return x[0];});
+// Sort codes by grade at freeze time — display order fixed permanently
+var snapByCodeFreeze={}; Object.keys(compactSnaps).forEach(function(c){var s=compactSnaps[c];var d={};Object.keys(s).forEach(function(k){d[k]=s[k]/100;});snapByCodeFreeze[c]=d;});
+var top5CodesFreeze=sortCodesByGrade(top5.map(function(x){return x[0];}),frozenScores,snapByCodeFreeze,result.weights,entries,preds,letter,result.shopConf,result.regime);
+var frozenCodeData=lastSortCodeData;
 var frozenSummary=buildPlainEnglishSummary(entries,preds,top5CodesFreeze,result,letter)||'';
 var frozenConf=buildRefillConfidenceScore(entries,preds,top5CodesFreeze,result,letter)||null;
 var predId=Date.now();
-// Always save snapshot to external store \u2014 learner can analyze anytime
+// Always save snapshot to external store — learner can analyze anytime
 saveSnapshot(predId,compactSnaps);
 // Also embed inline for the 10 most recent (fast path for learner)
 var predsWithSnaps=resolvedPreds.filter(function(p){return p.frozenSnapshots;}).length;
@@ -3369,7 +3640,7 @@ db.shops[letter].predictions.push({
   createdDate:lastEntryDate,
   targetDate:null,
   modelVersion:SIGNAL_VERSION,
-  predictedCodes:top5.map(function(x){return x[0];}),
+  predictedCodes:top5CodesFreeze,
   promotedCodes:(result.promotions||[]).map(function(p){return p.promoted;}),
   patternRules:(result.promotions||[]).map(function(p){
     return p.pattern&&p.pattern.rule?p.pattern.rule.slice(0,40):'pattern';
@@ -3378,7 +3649,8 @@ db.shops[letter].predictions.push({
   regimeAtTime:result.regime?{shifting:result.regime.shifting,note:result.regime.note||''}:null,
   scores:top5Scores,
   frozenScores:frozenScores,
-  frozenSnapshots:embedInline?compactSnaps:null, // inline for recent, external store for all
+  frozenSnapshots:embedInline?compactSnaps:null,
+  frozenCodeData:frozenCodeData,
   weightsAtTime:Object.assign({},result.weights),
   frozenSummary:frozenSummary,
   frozenConf:frozenConf,
@@ -3439,6 +3711,16 @@ function decompressSnap(snap,isCompact){
   });
   return out;
 }
+function clearAllData(){
+  if(!confirm('Clear ALL data? This cannot be undone. Export a backup first.')) return;
+  localStorage.clear();
+  db={shops:{}};
+  activeShop=null;
+  renderShopPills();
+  renderDataTab();
+  showToast('All data cleared','ok');
+}
+
 function exportFullBackup(){
 db=loadDB();
 var json=JSON.stringify(db,null,2);
@@ -3583,19 +3865,7 @@ caption:'last '+last5.length+' predictions'};
 
 
 
-function renderTagGrid(id,codes){
-var el=document.getElementById(id); el.innerHTML='';
-var counts={};
-codes.forEach(function(c){counts[c]=(counts[c]||0)+1;});
-var seen={};
-codes.forEach(function(c){
-if(seen[c]) return; seen[c]=true;
-var t=document.createElement('span');
-t.className='tag';
-t.textContent=counts[c]>1?c+' x'+counts[c]:c;
-el.appendChild(t);
-});
-}
+
 
 function buildPlainEnglishSummary(entries, preds, top5Codes, bcsResult, letter){
 if(!top5Codes.length) return '';
@@ -3661,192 +3931,9 @@ a.href=url; a.download=filename; a.click();
 var el=document.getElementById('icloud-status');
 if(el) el.innerHTML='<div class="alert alert-info">📥 File downloaded — move it to iCloud Drive in the Files app.</div>';
 }
-function renderArchive(){
-  var el=document.getElementById('archive-list');
-  if(!el) return;
-  db=loadDB();
-  var btn=document.getElementById('arch-toggle-btn');
-  if(btn) btn.textContent=archShowAll?'This Shop':'All Shops Today';
 
-  // Update section title with counts
-  var titleEl=document.getElementById('sec-title-archive');
-  if(titleEl){
-    var countStr='';
-    if(archShowAll){
-      var today=todayStr();
-      var todayTotal=0;
-      Object.keys(db.shops).forEach(function(s){
-        todayTotal+=(db.shops[s].entries||[]).filter(function(e){return e.date===today;}).length;
-      });
-      countStr=' <span style="color:var(--accent);font-weight:900">'+todayTotal+' today</span>';
-    } else if(activeShop&&db.shops[activeShop]){
-      var n=(db.shops[activeShop].entries||[]).length;
-      countStr=' <span style="color:var(--accent);font-weight:900">'+n+'</span>';
-    }
-    titleEl.innerHTML='Archive'+countStr+'<span class="toggle-icon">&#x25BE;</span>';
-  }
 
-  if(archShowAll){
-    var today=todayStr();
-    var all=[];
-    Object.keys(db.shops).sort().forEach(function(s){
-      (db.shops[s].entries||[]).filter(function(e){return e.date===today;}).forEach(function(e){
-        all.push({shop:s,entry:e});
-      });
-    });
-    if(!all.length){
-      el.innerHTML='<div class="empty"><div class="empty-icon">&#x1F4C2;</div><p>No entries today across any shop</p></div>';
-      return;
-    }
-    el.innerHTML='<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Today across all shops \u2014 '+today+'</div>'
-      +all.map(function(x){
-        return '<div class="entry-row">'
-          +'<span class="entry-date">'+x.shop+'</span>'
-          +'<span class="entry-codes">'+x.entry.codes.join(' ')+'</span>'
-          +'</div>';
-      }).join('');
-    return;
-  }
 
-  if(!activeShop){
-    el.innerHTML='<div class="empty"><p>Select a shop to see entries</p></div>';
-    return;
-  }
-  var entries=shopEntries(activeShop);
-  if(!entries.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">&#x1F4C2;</div><p>No entries yet for '+activeShop+'</p></div>';
-    return;
-  }
-  el.innerHTML=entries.slice().reverse().map(function(e){
-    return '<div class="entry-row">'
-      +'<span class="entry-date">'+e.date.slice(5)+'</span>'
-      +'<span class="entry-codes">'+e.codes.join(' ')+'</span>'
-      +'<button class="entry-del" onclick="deleteEntry(\''+e.id+'\')" title="Delete">&#x1F5D1;</button>'
-      +'</div>';
-  }).join('');
-}
-function renderLearnerAlert(letter){
-  letter=letter||activeShop;
-  var el=document.getElementById('learner-alert');
-  if(!el) return;
-  db=loadDB();
-  var a=db.shops[letter]&&db.shops[letter].learnerAlert;
-  if(!a||a.hitGain===undefined){el.style.display='none';return;}
-  // Stay silent if learner hasn't cross-checked its own evidence yet
-  if(a.readyToSurface===false){el.style.display='none';return;}
-  // Always show if learner has run and is ready — even hold verdict
-  if(!a.btAnchorRate&&(!a.hitGain||a.hitGain<=0)){el.style.display='none';return;}
-  el.style.display='block';
-  var boost=(a.topBoost||[]).map(function(s){return (SIGNAL_NAMES[s.k]||s.k)+' &#x2191;';}).join(', ');
-  var reduce=(a.topReduce||[]).map(function(s){return (SIGNAL_NAMES[s.k]||s.k)+' &#x2193;';}).join(', ');
-  var missed=(a.missedOpportunities||[]).map(function(m){return m.code+'('+m.missCount+'\u00D7)';}).join(' ');
-
-  // Backtest row — shown in both modes
-  var btHTML='';
-  if(a.btDiff!==null&&a.btN){
-    var col=a.btDiff>0?'var(--green)':a.btDiff<0?'var(--red)':'var(--muted)';
-    var arrow=a.btDiff>0?'\u2191':a.btDiff<0?'\u2193':'';
-    var diffLabel=a.btDiff>0?(arrow+'+'+ a.btDiff+'%'):a.btDiff<0?(arrow+a.btDiff+'%'):'= No difference';
-    var extraHits=a.learnedHits-a.currentHits;
-    btHTML='<div style="font-size:11px;padding:5px 0;border-top:1px solid var(--border);margin-bottom:4px">'
-      // Primary: delta is the decision number
-      +'<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:3px">'
-        +'<span style="font-size:16px;font-family:var(--mono);font-weight:900;color:'+col+'">'+diffLabel+'</span>'
-        +'<span style="color:var(--muted);font-size:10px">vs current model over '+a.btN+' refills</span>'
-      +'</div>'
-      // Secondary: absolute rates as context
-      +'<div style="display:flex;gap:10px;font-size:10px;color:var(--muted)">'
-        +'<span>This model <span style="font-family:var(--mono);color:var(--text)">'+a.btAnchorRate+'%</span></span>'
-        +'<span>Current <span style="font-family:var(--mono);color:var(--text)">'+a.btCurrentRate+'%</span></span>'
-        +(extraHits!==0?'<span style="color:'+col+'">'+Math.abs(extraHits)+' '+(extraHits>0?'more':'fewer')+' hits</span>':'')
-      +'</div>'
-    +'</div>';
-  }
-
-  if(a.needsAlert){
-    var isHold=a.btDiff!==null&&a.btDiff<=0;
-    var isAnchor=!!a.isAnchor;
-    var headerColor=isHold?'var(--red)':isAnchor?'var(--gold)':'var(--gold)';
-    var headerIcon=isHold?'&#x23F8;':isAnchor?'&#x2605;':'&#x26A0;&#xFE0F;';
-    var headerText=isAnchor
-      ?(isHold?'Anchor '+a.anchorDate+' \u2014 Hold current model':'Anchor '+a.anchorDate+' \u2014 Apply this model')
-      :(isHold&&a.btDiff===0?'No improvement found'
-        :isHold?'Hold current model'
-        :'Review before applying');
-    var subText=isAnchor?a.alertReason
-      :(a.btN&&a.btN<5?a.alertReason+' (only '+a.btN+' refills tested)'
-        :a.alertReason);
-    el.innerHTML='<div class="learner-card" style="border-color:'+headerColor+'">'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-        +'<span style="font-size:16px">'+headerIcon+'</span>'
-        +'<div>'
-          +'<div style="font-size:12px;font-weight:700;color:'+headerColor+'">'+headerText+'</div>'
-          +'<div style="font-size:10px;color:var(--muted)">'+subText+'</div>'
-        +'</div>'
-      +'</div>'
-      +btHTML
-      +(!isAnchor&&(a.learnedOnly||[]).length?'<div style="font-size:11px;color:var(--muted);margin-bottom:4px">'
-        +'Would add: <span class="mono" style="color:var(--green)">'+(a.learnedOnly||[]).join(' ')+'</span>'
-        +((a.currentOnly||[]).length?' &#xB7; remove: <span class="mono">'+(a.currentOnly||[]).join(' ')+'</span>':'')
-      +'</div>':'')
-      +(!isAnchor&&missed?'<div style="font-size:10px;color:var(--gold);margin-bottom:6px">Missed codes: '+missed+'</div>':'')
-      +'<div class="btn-row">'
-        +(isHold
-          ?'<button class="btn btn-secondary btn-sm" onclick="dismissLearnerAlert(true)">&#x2713; Keep current</button>'
-          :(isAnchor
-            ?'<button class="btn btn-primary btn-sm" onclick="applyLearnerWeights()">&#x2605; Apply anchor</button>'
-             +'<button class="btn btn-secondary btn-sm" onclick="dismissLearnerAlert(true)">&#x2715; Skip</button>'
-            :'<button class="btn btn-primary btn-sm" onclick="applyLearnerWeights()">Apply anyway</button>'
-             +'<button class="btn btn-secondary btn-sm" onclick="dismissLearnerAlert()">&#x2715; Skip</button>'
-          )
-        )
-      +'</div>'
-    +'</div>';
-  } else {
-    el.innerHTML='<div class="learner-card">'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-        +'<span style="font-size:16px">&#x1F916;</span>'
-        +'<div>'
-          +'<div style="font-size:12px;font-weight:700;color:var(--green)">Model updated \u2014 +'+a.hitGain+' hit'+(a.hitGain>1?'s':'')+' improvement</div>'
-          +'<div style="font-size:10px;color:var(--muted)">'+a.consistencyPct+'% consistent &#xB7; avg +'+a.avgGain+' &#xB7; '+a.snapshotCount+' refills</div>'
-        +'</div>'
-      +'</div>'
-      +btHTML
-      +((a.learnedOnly||[]).length?'<div style="font-size:11px;color:var(--muted);margin-bottom:4px">'
-        +'Now includes: <span class="mono" style="color:var(--green)">'+(a.learnedOnly||[]).join(' ')+'</span>'
-        +((a.currentOnly||[]).length?' &#xB7; removed: <span class="mono">'+(a.currentOnly||[]).join(' ')+'</span>':'')
-      +'</div>':'')
-      +((boost||reduce)?'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'
-        +(boost?'<span style="color:var(--green)">'+boost+'</span>':'')
-        +(boost&&reduce?' &#xB7; ':'')
-        +(reduce?'<span style="color:var(--red)">'+reduce+'</span>':'')
-      +'</div>':'')
-      +(missed?'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Missed codes addressed: '+missed+'</div>':'')
-      +'<div class="btn-row">'
-        +'<button class="btn btn-secondary btn-sm" onclick="rebuildActiveShop()">&#x1F527; Rebuild</button>'
-        +'<button class="btn btn-secondary btn-sm" onclick="undoLearnerUpdate()">&#x21A9; Undo</button>'
-        +'<button class="btn btn-secondary btn-sm" onclick="dismissLearnerAlert()">&#x2715; OK</button>'
-      +'</div>'
-    +'</div>';
-  }
-}
-function renderShopPills(){
-  var el=document.getElementById('shop-pills-inner');
-  if(!el) return;
-  db=loadDB();
-  var shops=Object.keys(db.shops).sort();
-  if(!shops.length){
-    el.innerHTML='<span style="font-size:12px;color:var(--muted)">No shops yet \u2014 tap + to add</span>';
-    return;
-  }
-  el.innerHTML=shops.map(function(s){
-    var shop=db.shops[s];
-    var hasPending=(shop.predictions||[]).some(function(p){return p.status==='pending';});
-    var hasData=(shop.entries||[]).length>0;
-    var cls='shop-pill'+(s===activeShop?' active':'')+(hasData?' has-data':'')+(hasPending?' pending-pred':'');
-    return '<button class="'+cls+'" onclick="selectShop(\''+s+'\')" data-shop="'+s+'">'+s+'</button>';
-  }).join('');
-}
 function saveWeights(letter, w){
 db=loadDB();
 if(!db.shops[letter]) return;
@@ -3879,49 +3966,16 @@ function toggleObsWindow(el){
   body.style.display=open?'none':'block';
   el.querySelector('.obs-arrow').textContent=open?'▾':'▴';
 }
-function toggleSection(id){
-  var body=document.getElementById('sec-'+id);
-  var title=document.getElementById('sec-title-'+id);
-  if(!body||!title) return;
-  var isCollapsed=body.classList.contains('collapsed');
-  if(isCollapsed){
-    body.style.maxHeight=body.scrollHeight+'px';
-    body.classList.remove('collapsed');
-    title.classList.remove('collapsed');
-    setTimeout(function(){body.style.maxHeight='';},260);
-  } else {
-    body.style.maxHeight=body.scrollHeight+'px';
-    setTimeout(function(){
-      body.style.maxHeight='0px';
-      body.classList.add('collapsed');
-      title.classList.add('collapsed');
-    },10);
-  }
-  try{var st=JSON.parse(localStorage.getItem('sec_state')||'{}');
-    st[id]=isCollapsed; localStorage.setItem('sec_state',JSON.stringify(st));}catch(e){}
-}
-function restoreSectionStates(){
-  try{
-    var st=JSON.parse(localStorage.getItem('sec_state')||'{}');
-    Object.keys(st).forEach(function(id){
-      if(!st[id]){
-        var body=document.getElementById('sec-'+id);
-        var title=document.getElementById('sec-title-'+id);
-        if(body&&title){body.classList.add('collapsed');body.style.maxHeight='0px';title.classList.add('collapsed');}
-      }
-    });
-  }catch(e){}
-}
-function updateAllBanners(){
-  renderShopPills();
-}
+
+
+
 
 var activeShop=null;
 var activeTab='data';
 
 var archShowAll=false;
-</script>
-<script>
+
+
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // APP STATE
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
@@ -3933,39 +3987,14 @@ var confirmCb=null;
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // NAVIGATION
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-function showTab(tab){
-  activeTab=tab;
-  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
-  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
-  document.getElementById('panel-'+tab).classList.add('active');
-  document.getElementById('nav-'+tab).classList.add('active');
-  if(tab==='data')    renderDataTab();
-  if(tab==='predict'){
-    renderPredictTab();
-    // Run learner on demand whenever owner opens PREDICT
-    if(activeShop) setTimeout(function(){ runBackgroundLearner(activeShop); }, 50);
-  }
-  if(tab==='track')   renderTrackTab();
-}
+
 
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // SHOP MANAGEMENT
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 
 
-function selectShop(code){
-  activeShop=code;
-  renderShopPills();
-  var rebuildBtn=document.getElementById('rebuild-active-btn');
-  if(rebuildBtn) rebuildBtn.style.display=activeShop?'':'none';
-  if(activeTab==='data')    renderDataTab();
-  if(activeTab==='predict'){
-    renderPredictTab();
-    // Run learner on demand when switching shops on PREDICT
-    setTimeout(function(){ runBackgroundLearner(activeShop); }, 50);
-  }
-  if(activeTab==='track')   renderTrackTab();
-}
+
 
 function openAddShopModal(){
   document.getElementById('new-shop-code').value='';
@@ -4023,52 +4052,11 @@ function renameShop(code){
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // DATA TAB
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-function renderDataTab(){
-  renderShopManageList();
-  renderArchive();
-  renderStorageHealth();
-  var rebuildBtn=document.getElementById('rebuild-active-btn');
-  if(rebuildBtn) rebuildBtn.style.display=activeShop?'inline-flex':'none';
-  // Set today's date
-  var dateEl=document.getElementById('entry-date');
-  if(dateEl&&!dateEl.value) dateEl.value=todayStr();
-}
 
-function renderShopManageList(){
-  var el=document.getElementById('shop-manage-list');
-  if(!el) return;
-  db=loadDB();
-  var shops=Object.keys(db.shops).sort();
-  if(!shops.length){
-    el.innerHTML='<div class="muted" style="font-size:12px;margin-bottom:10px">No shops yet.</div>';
-    return;
-  }
-  el.innerHTML='<div style="margin-bottom:10px">'+shops.map(function(s){
-    var shop=db.shops[s];
-    var n=(shop.entries||[]).length;
-    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">'
-      +'<span class="mono" style="font-weight:900;min-width:40px;color:var(--accent)">'+s+'</span>'
-      +'<span style="flex:1;font-size:12px;color:var(--muted)">'+n+' entries</span>'
-      +'<button class="btn btn-secondary btn-sm" onclick="renameShop(\''+s+'\')">Rename</button>'
-      +'<button class="btn btn-danger btn-sm" onclick="deleteShop(\''+s+'\')">Delete</button>'
-      +'</div>';
-  }).join('')+'</div>';
-}
 
-function renderStorageHealth(){
-  var el=document.getElementById('storage-health-bar');
-  if(!el) return;
-  try{
-    var used=JSON.stringify(localStorage).length;
-    var pct=Math.round(used/5242880*100);
-    var col=pct>80?'var(--red)':pct>60?'var(--gold)':'var(--green)';
-    el.innerHTML='<div style="margin-bottom:4px;display:flex;justify-content:space-between">'
-      +'<span style="font-size:11px;color:var(--muted)">Storage</span>'
-      +'<span style="font-size:11px;font-family:var(--mono);color:'+col+'">'+pct+'% &#xB7; '+Math.round(used/1024)+'KB / 5120KB</span>'
-      +'</div>'
-      +'<div class="progress-track"><div class="progress-fill" style="width:'+pct+'%;background:'+col+'"></div></div>';
-  }catch(e){}
-}
+
+
+
 
 
 
@@ -4077,11 +4065,13 @@ function toggleArchiveAllShops(){
   renderArchive();
 }
 
-function deleteEntry(id){
+function deleteEntry(shop, date){
+  if(!shop&&activeShop) shop=activeShop;
+  if(!shop||!date) return;
   confirmAction('Delete entry?','This refill entry will be permanently removed.',function(){
     db=loadDB();
-    if(!activeShop||!db.shops[activeShop]) return;
-    db.shops[activeShop].entries=(db.shops[activeShop].entries||[]).filter(function(e){return String(e.id)!==String(id);});
+    if(!db.shops[shop]) return;
+    db.shops[shop].entries=(db.shops[shop].entries||[]).filter(function(e){return e.date!==date;});
     saveDB(db);
     renderArchive();
     showToast('Entry deleted');
@@ -4143,179 +4133,32 @@ function handleImportFile(evt){
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // PREDICT TAB
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-function renderPredictTab(){
-  if(!activeShop){
-    ['signal-perf-panel','refill-confidence','plain-english','prediction-codes','pairs-panel']
-      .forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML='<div class="empty"><p>Select a shop</p></div>';});
-    return;
-  }
-  db=loadDB();
-  var preds=shopPreds(activeShop);
-  var entries=shopEntries(activeShop);
-
-  // Get frozen pending prediction
+// ════════════════════════════════════════════════════════════════
+// SINGLE SOURCE OF TRUTH — one function called by PREDICT and TRACK
+// Never diverges. No branching in callers.
+// ════════════════════════════════════════════════════════════════
+function getCurrentPred(preds){
+  // Priority 1: pending (after rebuild, before next refill)
   var pending=preds.filter(function(p){return p.status==='pending';});
-  var pred=pending.length?pending[pending.length-1]:null;
-
-  // Accept pred if it has frozenScores OR scores (older predictions may use scores only)
-  var predScores=pred&&(pred.frozenScores&&Object.keys(pred.frozenScores).length
-    ?pred.frozenScores
-    :pred.scores&&Object.keys(pred.scores||{}).length?pred.scores:null);
-
-  if(!pred||!predScores){
-    ['refill-confidence','plain-english','prediction-codes']
-      .forEach(function(id){var el=document.getElementById(id);
-        if(el)el.innerHTML='<div class="empty"><p>No prediction yet — run Rebuild</p></div>';});
-    document.getElementById('signal-perf-panel').innerHTML='';
-    document.getElementById('pairs-panel').innerHTML='';
-    renderLearnerAlert(activeShop);
-    return;
-  }
-
-  try{
-    var frozenScores=predScores;
-    var weightsAtFreezeTime=pred.weightsAtTime||getWeights(activeShop);
-    var isCompact=!!(pred.frozenSnapshots&&pred.modelVersion);
-    var rawSnap=getSnapshotForPred(pred);
-    var snapByCode=decompressSnap(rawSnap,isCompact);
-
-    // Build a result-like object from frozen data for render functions
-    var frozenResult={
-      scores:frozenScores,
-      snapshots:snapByCode,
-      weights:weightsAtFreezeTime,
-      regime:pred.regimeAtTime||null,
-      signalLifts:null,
-      frozenConf:pred.frozenConf||null,
-      frozenSummary:pred.frozenSummary||null
-    };
-
-    // Signals — reads from stored performanceAnalysis (frozen by learner)
-    renderSignalPerf(weightsAtFreezeTime,preds,snapByCode,frozenScores);
-
-    // Confidence and plain English — from frozen data
-    renderConfidenceScore(entries,preds,frozenResult);
-
-    // Prediction codes — from frozen prediction only
-    renderPredictionCodes(null,entries,preds,pred);
-
-    // Pairs — from entries history (static co-occurrence, no model recalc)
-    renderPairs(entries,frozenScores);
-
-    // Learner — background only
-    renderLearnerAlert(activeShop);
-
-  }catch(e){
-    var el=document.getElementById('prediction-codes');
-    if(el) el.innerHTML='<div class="alert alert-err">Predict error: '+e.message+'</div>';
-  }
+  if(pending.length) return {pred:pending[pending.length-1], state:'pending'};
+  // Priority 2: liveResolved sorted by actualDate (after refill, before rebuild)
+  var live=preds.filter(function(p){return p.liveResolved&&p.outcome;});
+  live=live.slice().sort(function(a,b){return (b.actualDate||'').localeCompare(a.actualDate||'');});
+  if(live.length) return {pred:live[0], state:'liveResolved'};
+  return {pred:null, state:'none'};
 }
 
-function renderSignalPerf(weights,preds,snaps,scores){
-  var el=document.getElementById('signal-perf-panel');
-  if(!el) return;
-  db=loadDB();
-  var analysis=db.shops[activeShop]&&db.shops[activeShop].performanceAnalysis;
-  var sigEff=analysis&&analysis.sigEffectiveness||{};
-  var missed=analysis&&analysis.missedOpportunities||[];
 
-  // Signal profile — per-shop effectiveness
-  var html='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Signal profile for '+activeShop+'</div>';
-  html+=SIGNAL_KEYS.map(function(k){
-    var w=Math.round((weights[k]||DEFAULT_WEIGHTS[k])*100);
-    var col=SIGNAL_COLORS[k]||'var(--accent)';
-    var eff=sigEff[k];
-    var liftStr='',liftCol='var(--muted)',statusDot='';
 
-    if(eff&&eff.lift!==null&&eff.n>=3){
-      var lift=Math.round(eff.lift*100);
-      if(eff.lift>0.05){
-        liftStr='\u2191 working ('+lift+'%, '+eff.n+'obs)';
-        liftCol='var(--green)';
-        statusDot='<span style="color:var(--green);font-size:8px">\u25CF</span>';
-      } else if(eff.lift<-0.10){
-        liftStr='\u2193 suppressed ('+lift+'%, '+eff.n+'obs)';
-        liftCol='var(--red)';
-        statusDot='<span style="color:var(--red);font-size:8px">\u25CF</span>';
-      } else {
-        liftStr='neutral ('+lift+'%, '+eff.n+'obs)';
-        liftCol='var(--muted)';
-        statusDot='<span style="color:var(--muted);font-size:8px">\u25CB</span>';
-      }
-    } else if(eff&&eff.n>0){
-      liftStr='insufficient data ('+eff.n+'obs)';
-      liftCol='var(--muted)';
-      statusDot='<span style="color:var(--muted);font-size:8px">\u25A1</span>';
-    } else {
-      liftStr='no data yet';
-      liftCol='var(--muted)';
-      statusDot='<span style="color:var(--muted);font-size:8px">\u25A1</span>';
-    }
 
-    return '<div class="sig-bar-wrap">'
-      +'<div class="sig-bar-row">'
-        +'<span class="sig-bar-name">'+statusDot+' '+((SIGNAL_NAMES&&SIGNAL_NAMES[k])||k)+'</span>'
-        +'<div class="sig-bar-track"><div class="sig-bar-fill" style="width:'+w+'%;background:'+col+'"></div></div>'
-        +'<span class="sig-bar-val" style="color:'+col+'">'+w+'%</span>'
-        +'<span class="sig-bar-lift" style="color:'+liftCol+'">'+liftStr+'</span>'
-      +'</div>'
-      +'</div>';
-  }).join('');
 
-  // Missed opportunities
-  if(missed.length){
-    html+='<div style="margin-top:10px;font-size:10px;font-weight:700;color:var(--muted);'
-      +'text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Missed opportunities</div>';
-    html+=missed.map(function(m){
-      var topSigNames=m.topSignals.map(function(s){return SIGNAL_NAMES[s.k]||s.k;}).join(', ');
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">'
-        +'<span class="mono" style="font-weight:900;color:var(--gold);min-width:28px">'+m.code+'</span>'
-        +'<span style="font-size:11px;color:var(--muted);flex:1">missed '+m.missCount+'\u00D7 \u00B7 signals: '+topSigNames+'</span>'
-      +'</div>';
-    }).join('');
-  }
 
-  el.innerHTML=html;
-}
-
-function renderConfidenceScore(entries,preds,result){
-  var el=document.getElementById('refill-confidence');
-  if(!el) return;
-  // Use frozen confidence if available, otherwise compute from result
-  var rcs=result.frozenConf||null;
-  if(!rcs){
-    var allScores=result.scores||result.frozenScores||{};
-    var top5Codes=Object.entries(allScores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
-    rcs=buildRefillConfidenceScore(entries,preds,top5Codes,result,activeShop);
-  }
-  var adapted=rcs.adapted;
-  el.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:8px">'
-    +'<span style="font-size:28px;font-weight:900;font-family:var(--mono);color:'+rcs.col+'">'+rcs.score+'</span>'
-    +'<div>'
-      +'<div style="font-size:15px;font-weight:800;color:'+rcs.col+'">Grade '+rcs.grade+'</div>'
-      +'<div style="font-size:11px;color:var(--muted)">Refill confidence'
-        +(adapted?' &#xB7; <span style="color:var(--green)">&#x2605; adapted</span>':' &#xB7; <span class="muted">priors</span>')
-      +'</div>'
-    +'</div>'
-    +(rcs.regimeShifting?'<span class="conf-badge conf-low" style="margin-left:auto">&#x26A1; regime shift</span>':'')
-    +'</div>';
-
-  // Plain English
-  var pe=document.getElementById('plain-english');
-  if(pe){
-    // Use frozen summary if available
-    var peText=result.frozenSummary||null;
-    if(!peText){
-      var top5CodesForSummary=Object.entries(result.scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
-      peText=buildPlainEnglishSummary(entries,preds,top5CodesForSummary,result,activeShop);
-    }
-    pe.innerHTML=peText?'<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:6px">'+peText+'</div>':'';
-  }
-}
 
 function buildCodeHitRate(code, preds){
+  // Only count liveResolved predictions — actual refills matched against real predictions
+  // Never count auto-rebuilt predictions — those are synthetic and inflate hit rates
   var resolved=preds.filter(function(p){
-    return p.status!=='pending'&&p.outcome&&p.predictedCodes&&
+    return p.liveResolved&&p.outcome&&p.predictedCodes&&
            p.predictedCodes.indexOf(code)>-1;
   });
   if(resolved.length<3) return null;
@@ -4324,423 +4167,18 @@ function buildCodeHitRate(code, preds){
           rate:Math.round(hits/resolved.length*100)};
 }
 
-function renderPredictionCodes(result,entries,preds,frozenPred){
-  var el=document.getElementById('prediction-codes');
-  if(!el) return;
 
-  // Accept frozenScores (new) or scores (old format)
-  var predScores=frozenPred&&(
-    (frozenPred.frozenScores&&Object.keys(frozenPred.frozenScores).length)?frozenPred.frozenScores:
-    (frozenPred.scores&&Object.keys(frozenPred.scores||{}).length)?frozenPred.scores:null
-  );
 
-  if(!frozenPred||!predScores){
-    el.innerHTML='<div class="empty"><p>No frozen prediction — run Rebuild</p></div>';
-    return;
-  }
 
-  var frozen=predScores;
-  var weights=frozenPred.weightsAtTime||{};
-  var fullMax=Math.max.apply(null,Object.values(frozen).concat([1]));
-  var top5Codes=frozenPred.predictedCodes||[];
-  // Deduplicate promoted and watchout arrays
-  var seen=[];
-  var promoted=(frozenPred.promotedCodes||[]).filter(function(c){
-    if(seen.indexOf(c)>-1) return false; seen.push(c); return true;
-  });
-  var seen2=[];
-  var watchouts=(frozenPred.watchoutCodes||[]).filter(function(c){
-    if(seen2.indexOf(c)>-1) return false; seen2.push(c); return true;
-  });
-
-  // Decompress frozen snapshots — these are the signal values at freeze time
-  var isCompact=!!(frozenPred.frozenSnapshots&&frozenPred.modelVersion);
-  var rawSnap=getSnapshotForPred(frozenPred);
-  var snapByCode=decompressSnap(rawSnap,isCompact);
-
-  // Sort top5 by grade (A→B→C→D→N) then combinedPct within same grade
-  var gradeOrder={A:0,B:1,C:2,D:3,N:4};
-  top5Codes=top5Codes.slice().sort(function(a,b){
-    var aPct=Math.round((frozen[a]||0)/fullMax*100);
-    var bPct=Math.round((frozen[b]||0)/fullMax*100);
-    var aGrade=buildCodeConfidenceGrade(a,snapByCode[a]||{},weights,entries,preds,activeShop,aPct);
-    var bGrade=buildCodeConfidenceGrade(b,snapByCode[b]||{},weights,entries,preds,activeShop,bPct);
-    var aOrder=gradeOrder[aGrade.grade]!==undefined?gradeOrder[aGrade.grade]:5;
-    var bOrder=gradeOrder[bGrade.grade]!==undefined?gradeOrder[bGrade.grade]:5;
-    if(aOrder!==bOrder) return aOrder-bOrder;
-    var aHR=buildCodeHitRate(a,preds);
-    var bHR=buildCodeHitRate(b,preds);
-    var aCombined=aHR?Math.round(aPct*0.5+aHR.rate*0.5):aPct;
-    var bCombined=bHR?Math.round(bPct*0.5+bHR.rate*0.5):bPct;
-    return bCombined-aCombined;
-  });
-
-  function frozenRow(c,type){
-    var scorePct=Math.round((frozen[c]||0)/fullMax*100);
-    var snap=snapByCode[c]||{};
-    var consensus=buildSignalConsensus(c,snap,weights,weights);
-    var topDriving=consensus.yesSignals.slice(0,2).map(function(k){return SIGNAL_NAMES&&SIGNAL_NAMES[k]||k;}).join(' \u00B7 ');
-    var grade=buildCodeConfidenceGrade(c,snap,weights,entries,preds,activeShop,scorePct);
-    var typeIcon=type==='top5'?'':type==='promoted'?'&#x1F52C;':type==='watchout'?'&#x26A0;&#xFE0F;':'&#x1F3AF;';
-    var col=type==='top5'?'var(--text)':type==='promoted'?'var(--green)':type==='watchout'?'var(--gold)':'var(--teal)';
-
-    // Per-code historical hit rate (2nd number)
-    var hr=buildCodeHitRate(c,preds);
-    // Combined indicator: weighted blend of signal strength and historical hit rate
-    var combinedPct, combinedCol, combinedLabel;
-    if(hr){
-      combinedPct=Math.round(scorePct*0.5 + hr.rate*0.5);
-      combinedCol=combinedPct>=60?'var(--green)':combinedPct>=35?'var(--gold)':'var(--red)';
-      combinedLabel=combinedPct+'%';
-    } else {
-      combinedPct=scorePct;
-      combinedCol='var(--muted)';
-      combinedLabel=scorePct+'%';
-    }
-    var hrDisplay=hr
-      ?'<span style="color:var(--muted);font-size:10px;font-family:var(--mono)"> \u00B7 '+hr.rate+'%('+hr.predicted+')</span>'
-      :'<span style="color:var(--muted);font-size:10px"> \u00B7 N/A</span>';
-
-    // Obs window state
-    var obsState=(db.shops[activeShop]&&db.shops[activeShop].obsWindow&&
-      db.shops[activeShop].obsWindow[c])||{state:'idle'};
-    var obsLabel='';
-    var obsCol='var(--muted)';
-    if(obsState.state==='confirmed'){obsLabel='CONFIRMED';obsCol='var(--green)';}
-    else if(obsState.state==='watching'){obsLabel='WATCHING';obsCol='var(--gold)';}
-    else if(obsState.state==='overdue'){obsLabel='OVERDUE';obsCol='var(--red)';}
-    else if(obsState.state==='recovering'){obsLabel='RECOVERING';obsCol='var(--muted)';}
-
-    return '<div class="pred-code-row">'
-      +(typeIcon?'<span style="font-size:11px;min-width:16px">'+typeIcon+'</span>':'<span style="min-width:16px"></span>')
-      +'<span class="pred-code" style="color:'+col+'">'+c+'</span>'
-      +'<span class="pred-grade" style="color:'+grade.col+'">['+grade.grade+']'
-        +(grade.adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')
-        +(obsLabel?'<span style="font-size:8px;color:'+obsCol+';margin-left:3px">'+obsLabel+'</span>':'')
-      +'</span>'
-      +'<div class="pred-bar-track"><div class="pred-bar-fill" style="width:'+combinedPct+'%;background:'+combinedCol+'"></div></div>'
-      +'<span class="pred-pct" style="color:'+combinedCol+';font-weight:700">'+combinedLabel
-        +(hr?'<span style="color:'+(hr.rate>=50?'var(--green)':hr.rate>=30?'var(--gold)':'var(--red)')+';font-size:10px;font-family:var(--mono)"> \u00B7 '+hr.rate+'%('+hr.predicted+')</span>'
-            :'<span style="color:var(--muted);font-size:10px"> \u00B7 N/A</span>')
-      +'</span>'
-      +'<span class="pred-sigs" style="font-size:9px;color:var(--muted)">'+topDriving+'</span>'
-      +'</div>';
-  }
-
-  var html='';
-  html+=top5Codes.map(function(c){return frozenRow(c,'top5');}).join('');
-  var promoExtra=promoted.filter(function(c){return top5Codes.indexOf(c)===-1;});
-  if(promoExtra.length){
-    html+='<div class="pred-divider"></div>';
-    html+=promoExtra.map(function(c){return frozenRow(c,'promoted');}).join('');
-  }
-  var watchExtra=watchouts.filter(function(c){return top5Codes.indexOf(c)===-1&&promoExtra.indexOf(c)===-1;});
-  if(watchExtra.length){
-    html+='<div class="pred-divider"></div>';
-    html+=watchExtra.map(function(c){return frozenRow(c,'watchout');}).join('');
-  }
-  el.innerHTML=html||'<div class="empty"><p>No prediction available</p></div>';
-}
-
-function renderPairs(entries, scores){
-  var el=document.getElementById('pairs-panel');
-  if(!el) return;
-  if(entries.length<5){
-    el.innerHTML='<div class="muted" style="font-size:12px">Need 5+ entries for pair analysis</div>';
-    return;
-  }
-
-  var tight=buildTightCooccurrence(entries);
-  var n=entries.length;
-
-  // Top tight pairs
-  var tightPairs=[];
-  if(tight&&tight.pairs){
-    Object.entries(tight.pairs).forEach(function(kv){
-      var parts=kv[0].split('|');
-      tightPairs.push({a:parts[0],b:parts[1],count:kv[1],pct:Math.round(kv[1]/n*100)});
-    });
-  }
-  tightPairs.sort(function(a,b){return b.count-a.count;});
-
-  var html='';
-  if(tightPairs.length){
-    html+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Tight pairs (always together)</div>';
-    html+=tightPairs.slice(0,6).map(function(p){
-      return '<div class="pair-row">'
-        +'<span class="pair-codes">'+p.a+' + '+p.b+'</span>'
-        +'<span class="pair-meta">appear together</span>'
-        +'<span class="pair-pct" style="color:var(--green)">'+p.pct+'%</span>'
-        +'</div>';
-    }).join('');
-  }
-
-  // Co-occurrence implications — pass top5Codes derived from scores
-  var top5Codes=scores?Object.entries(scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];}):[];
-  if(!top5Codes.length){
-    // Fallback: use most frequent codes
-    var freq={};
-    entries.forEach(function(e){e.codes.forEach(function(c){freq[c]=(freq[c]||0)+1;});});
-    top5Codes=Object.entries(freq).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
-  }
-  var impls=buildCooccurImplications(entries,top5Codes);
-  if(impls&&impls.length){
-    html+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 6px">Implications (if A &#x2192; likely B)</div>';
-    html+=impls.slice(0,6).map(function(r){
-      // buildCooccurImplications returns {impliedCode, via, rate, reverseRate, tight}
-      return '<div class="pair-row">'
-        +'<span class="pair-codes">'+r.via+'</span>'
-        +'<span class="pair-meta">&#x2192; '+r.impliedCode+'</span>'
-        +'<span class="pair-pct" style="color:var(--accent)">'+r.rate+'%</span>'
-        +'</div>';
-    }).join('');
-  }
-
-  el.innerHTML=html||'<div class="muted" style="font-size:12px">No strong pairs detected yet</div>';
-}
 
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // TRACK TAB
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-function renderTrackTab(){
-  if(!activeShop){
-    ['track-score-panel','track-accuracy-chart','track-history','best-pred-list']
-      .forEach(function(id){
-        var el=document.getElementById(id);
-        if(el) el.innerHTML='<div class="empty"><p>Select a shop</p></div>';
-      });
-    return;
-  }
-  db=loadDB();
-  var entries=shopEntries(activeShop);
-  var preds=shopPreds(activeShop);
-  var info='<div style="font-size:10px;color:var(--muted);padding:4px 0">'+activeShop+' · '+entries.length+' entries · '+preds.length+' preds</div>';
-  try{ renderTrackScore(); }catch(e){
-    var el=document.getElementById('track-score-panel');
-    if(el) el.innerHTML=info+'<div class="alert alert-err">Score error: '+e.message+'</div>';
-    return;
-  }
-  try{ renderTrackHistory(); }catch(e){
-    var el=document.getElementById('track-history');
-    if(el) el.innerHTML=info+'<div class="alert alert-err">History error: '+e.message+'</div>';
-    return;
-  }
-  try{ renderModelHistory(); }catch(e){}
-  try{ renderBestPredList(); }catch(e){}
-}
 
-function renderTrackScore(){
-  var el=document.getElementById('track-score-panel');
-  if(!el) return;
-  db=loadDB();
-  var entries=shopEntries(activeShop);
-  var preds=shopPreds(activeShop);
-  if(entries.length<3){
-    el.innerHTML='<div class="muted" style="font-size:12px">Need 3+ entries</div>';
-    return;
-  }
 
-  var ms=shopModelStatus(activeShop);
-  var confCls=ms.level==='high'?'conf-high':ms.level==='med'?'conf-med':ms.level==='low'?'conf-low':'conf-none';
 
-  // Observation window states
-  var obs=shopObs(activeShop)||{};
-  var obsStates=Object.entries(obs).filter(function(kv){return kv[1]&&kv[1].state&&kv[1].state!=='idle';});
 
-  var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
-    +'<span class="conf-badge '+confCls+'">'+verdictLabel(ms.level)+'</span>'
-    +(ms.hitRate!==null?'<span style="font-size:12px;color:var(--muted)">'+ms.hitRate+'% hit &#xB7; '+ms.slotCov+'% slot</span>':'')
-    +'</div>';
 
-  // Show frozen confidence number + grade from pending prediction (same as PREDICT)
-  var pendingForConf=preds.filter(function(p){return p.status==='pending';});
-  var frozenConfPred=pendingForConf.length?pendingForConf[pendingForConf.length-1]:null;
-  if(frozenConfPred&&frozenConfPred.frozenConf){
-    var fc=frozenConfPred.frozenConf;
-    var confNum=fc.score||fc.confidence||0;
-    var confGrade=fc.grade||'';
-    var confGradeCol=confGrade==='A'?'var(--green)':confGrade==='B'?'var(--green)':
-      confGrade==='C'?'var(--gold)':confGrade==='D'?'var(--red)':'var(--muted)';
-    if(confNum){
-      html='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
-        +'<span style="font-size:32px;font-weight:900;font-family:var(--mono);color:'+confGradeCol+'">'+confNum+'</span>'
-        +'<div>'
-          +'<div style="font-size:14px;font-weight:700;color:'+confGradeCol+'">Grade '+confGrade+'</div>'
-          +'<div style="font-size:11px;color:var(--muted)">Refill confidence'
-            +(fc.adapted?'<span style="color:var(--green);margin-left:4px">&#x2605; adapted</span>':'')
-          +'</div>'
-        +'</div>'
-        +'<span class="conf-badge '+confCls+'" style="margin-left:auto">'+verdictLabel(ms.level)+'</span>'
-      +'</div>';
-    }
-  }
-
-  // Per-code grade table — read from frozen pending prediction (same source as PREDICT)
-  var pending=preds.filter(function(p){return p.status==='pending';});
-  var frozenPred=pending.length?pending[pending.length-1]:null;
-  if(frozenPred){
-    var predScores=frozenPred.frozenScores&&Object.keys(frozenPred.frozenScores).length
-      ?frozenPred.frozenScores
-      :frozenPred.scores||{};
-    var weights=frozenPred.weightsAtTime||{};
-    var isCompact=!!(frozenPred.frozenSnapshots&&frozenPred.modelVersion);
-    var rawSnap=getSnapshotForPred(frozenPred);
-    var snapByCode=decompressSnap(rawSnap,isCompact);
-    var top5Codes=frozenPred.predictedCodes||
-      Object.entries(predScores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
-    var fullMax=Math.max.apply(null,Object.values(predScores).concat([0.001]));
-    // Sort by grade then combinedPct — matches PREDICT display order
-    var gradeOrder={A:0,B:1,C:2,D:3,N:4};
-    top5Codes=top5Codes.slice().sort(function(a,b){
-      var aPct=Math.round((predScores[a]||0)/fullMax*100);
-      var bPct=Math.round((predScores[b]||0)/fullMax*100);
-      var aGrade=buildCodeConfidenceGrade(a,snapByCode[a]||{},weights,entries,preds,activeShop,aPct);
-      var bGrade=buildCodeConfidenceGrade(b,snapByCode[b]||{},weights,entries,preds,activeShop,bPct);
-      var aOrder=gradeOrder[aGrade.grade]!==undefined?gradeOrder[aGrade.grade]:5;
-      var bOrder=gradeOrder[bGrade.grade]!==undefined?gradeOrder[bGrade.grade]:5;
-      if(aOrder!==bOrder) return aOrder-bOrder;
-      var aHR=buildCodeHitRate(a,preds);
-      var bHR=buildCodeHitRate(b,preds);
-      var aCombined=aHR?Math.round(aPct*0.5+aHR.rate*0.5):aPct;
-      var bCombined=bHR?Math.round(bPct*0.5+bHR.rate*0.5):bPct;
-      return bCombined-aCombined;
-    });
-    html+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Frozen prediction grades</div>';
-    html+=top5Codes.map(function(c){
-      var pct=Math.round((predScores[c]||0)/fullMax*100);
-      var snap=snapByCode[c]||{};
-      var grade=buildCodeConfidenceGrade(c,snap,weights,entries,preds,activeShop,pct);
-      var hr=buildCodeHitRate(c,preds);
-      var combined=hr?Math.round(pct*0.5+hr.rate*0.5):pct;
-      var combinedCol=combined>=60?'var(--green)':combined>=35?'var(--gold)':'var(--red)';
-      var obsState=(obs[c]&&obs[c].state!=='idle')?'<span style="font-size:9px;color:var(--gold)"> '+obs[c].state.toUpperCase()+'</span>':'';
-      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)">'
-        +'<span class="mono" style="font-weight:900;min-width:28px;color:var(--accent)">'+c+'</span>'
-        +'<span style="font-size:11px;font-weight:900;font-family:var(--mono);color:'+grade.col+'">['+grade.grade+']'+(grade.adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')+'</span>'
-        +'<div style="flex:1;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden">'
-          +'<div style="width:'+combined+'%;height:100%;background:'+combinedCol+';border-radius:2px"></div>'
-        +'</div>'
-        +'<span style="font-size:11px;font-family:var(--mono);color:'+combinedCol+';font-weight:700">'+combined+'%</span>'
-        +obsState
-        +'</div>';
-    }).join('');
-  }
-
-  // Observation window — collapsible
-  if(obsStates.length){
-    var obsRows=obsStates.map(function(kv){
-      var col=kv[1].state==='confirmed'?'var(--red)':kv[1].state==='watching'?'var(--gold)':'var(--muted)';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)">'
-        +'<span class="mono" style="color:var(--accent);min-width:28px">'+kv[0]+'</span>'
-        +'<span style="font-size:11px;color:'+col+'">'+kv[1].state+'</span>'
-        +(kv[1].count?'<span style="font-size:10px;color:var(--muted);margin-left:auto">'+kv[1].count+'x</span>':'')
-        +'</div>';
-    }).join('');
-    html+='<div style="margin-top:8px">'
-      +'<div onclick="toggleObsWindow(this)" '
-      +'style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 0;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">'
-      +'Obs Window <span style="color:var(--gold);font-weight:900">'+obsStates.length+'</span>'
-      +'<span class="obs-arrow" style="margin-left:auto">&#x25BE;</span>'
-      +'</div>'
-      +'<div style="display:none">'+obsRows+'</div>'
-      +'</div>';
-  }
-
-  el.innerHTML=html;
-}
-
-function renderTrackHistory(){
-  var entries2=shopEntries(activeShop);
-  var predsAll=shopPreds(activeShop);
-  var resolved=predsAll.filter(function(p){return p.status!=='pending'&&p.outcome;});
-
-  var chartEl=document.getElementById('track-accuracy-chart');
-  var histEl=document.getElementById('track-history');
-
-  if(!resolved.length){
-    if(chartEl) chartEl.innerHTML='';
-    if(histEl) histEl.innerHTML='<div class="empty"><div class="empty-icon">&#x1F4CA;</div><p>No resolved predictions yet. Enter refills and rebuild to generate history.</p></div>';
-    return;
-  }
-
-  // Accuracy stats
-  var totalH=0,totalP=0;
-  resolved.forEach(function(p){Object.values(p.outcome).forEach(function(v){totalP++;if(v==='hit')totalH++;});});
-  var pct=totalP>0?Math.round(totalH/totalP*100):0;
-  var col=pct>=60?'var(--green)':pct>=33?'var(--gold)':'var(--red)';
-
-  var last5=resolved.slice(-5),prior5=resolved.slice(-10,-5);
-  
-  var l5=bRate(last5),p5=bRate(prior5);
-  var delta=l5!==null&&p5!==null?l5-p5:null;
-
-  // Chart
-  if(chartEl){
-    var bars=resolved.slice(-20).map(function(p){
-      var h=Object.values(p.outcome).filter(function(v){return v==='hit';}).length;
-      var r=Math.round(h/p.predictedCodes.length*100);
-      var bc=r===100?'var(--green)':r>=60?'var(--teal)':r>=33?'var(--gold)':'var(--red)';
-      var bh=Math.max(4,Math.round(r*0.44));
-      return '<div class="acc-bar" style="height:'+bh+'px;background:'+bc+'" title="'+r+'%"></div>';
-    }).join('');
-
-    var dots='';
-    if(resolved.length>=5){
-      var resl=resolved.slice(-20);
-      resl.forEach(function(_,i,arr){
-        var win=arr.slice(Math.max(0,i-4),i+1);
-        var h2=0,t2=0;win.forEach(function(p){Object.values(p.outcome).forEach(function(v){t2++;if(v==='hit')h2++;});});
-        var v=t2?Math.round(h2/t2*100):null;
-        if(v===null) return;
-        var x=Math.round((i+0.5)/resl.length*100);
-        var y=44-Math.round(v*0.44);
-        dots+='<div class="acc-ma-dot" style="left:'+x+'%;top:'+y+'px"></div>';
-      });
-    }
-
-    chartEl.innerHTML=
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-        +'<span style="font-size:24px;font-weight:900;font-family:var(--mono);color:'+col+'">'+pct+'%</span>'
-        +'<div style="font-size:11px;color:var(--muted)">'
-          +'code hit rate &#xB7; '+resolved.length+' predictions'
-          +(l5!==null?'<br>last 5: <strong style="color:'+(l5>=pct?'var(--green)':'var(--gold)')+'">'+l5+'%</strong>':'')
-          +(p5!==null?' &#xB7; prior 5: <strong>'+p5+'%</strong>':'')
-          +(delta!==null?' <span style="color:'+(delta>3?'var(--green)':delta<-3?'var(--red)':'var(--muted)')+'">'+( delta>0?'&#x2191;':'&#x2193;')+(delta>0?'+':'')+delta+'%</span>':'')
-        +'</div>'
-      +'</div>'
-      +'<div style="position:relative">'
-        +'<div class="acc-chart">'+bars+'</div>'
-        +'<div style="position:absolute;inset:0;pointer-events:none">'+dots+'</div>'
-      +'</div>';
-  }
-
-  // History table — last prediction visible, rest collapsible
-  if(histEl){
-    var revList=resolved.slice().reverse();
-    var first=revList[0];
-    var rest=revList.slice(1);
-    var firstTE=entries2.filter(function(e){return e.date<=first.createdDate;});
-    var firstTP=predsAll.filter(function(q){return q.createdDate<first.createdDate;});
-    var firstHTML=predCardHTML(first,false,firstTE,firstTP);
-    var restHTML='';
-    if(rest.length){
-      restHTML='<div>'
-        +'<div onclick="toggleObsWindow(this)" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 0;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-top:1px solid var(--border)">'
-        +'Prior predictions <span style="color:var(--accent);font-weight:900">'+rest.length+'</span>'
-        +'<span class="obs-arrow" style="margin-left:auto">&#x25BE;</span>'
-        +'</div>'
-        +'<div style="display:none">'
-        +rest.map(function(p){
-          var te=entries2.filter(function(e){return e.date<=p.createdDate;});
-          var tp=predsAll.filter(function(q){return q.createdDate<p.createdDate;});
-          return predCardHTML(p,false,te,tp);
-        }).join('')
-        +'</div>'
-        +'</div>';
-    }
-    histEl.innerHTML=firstHTML+restHTML;
-  }
-}
 
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // LEARNER ALERT (Predict tab)
@@ -4761,21 +4199,7 @@ function undoLearnerUpdate(){
   showToast('Model update undone','ok');
 }
 
-function applyLearnerWeights(){
-  if(!activeShop) return;
-  db=loadDB();
-  var a=db.shops[activeShop]&&db.shops[activeShop].learnerAlert;
-  if(a&&a.learnedW){
-    snapshotCurrentWeights(activeShop);
-    db.shops[activeShop].weights=a.learnedW;
-    db.shops[activeShop].learnerAlert=Object.assign({},a,{applied:true,needsAlert:false});
-    saveDB(db);
-    recordModelDecision(activeShop,'apply',a.learnedW,a);
-  }
-  rebuildActiveShop();
-  dismissLearnerAlert();
-  showToast('Model applied — rebuilding','ok');
-}
+
 
 function dismissLearnerAlert(isHold){
   // Record hold decision if owner explicitly chose to keep current model
@@ -4794,196 +4218,32 @@ function dismissLearnerAlert(isHold){
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // BEST PREDICTION ANCHOR (Track tab)
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-function renderModelHistory(){
-  var el=document.getElementById('model-history-panel');
-  if(!el||!activeShop) return;
-  db=loadDB();
-  var history=(db.shops[activeShop].modelHistory||[]).slice().reverse();
-  var preds=shopPreds(activeShop);
 
-  if(!history.length){
-    el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:4px 0">No model decisions recorded yet. Apply or Hold a learner recommendation to start tracking.</div>';
-    return;
-  }
 
-  el.innerHTML=history.map(function(h){
-    var isApply=h.decision==='apply';
-    var col=isApply?'var(--green)':'var(--muted)';
-    var icon=isApply?'&#x2705;':'&#x23F8;';
 
-    // Signal changes
-    var sigChanges=[];
-    if(isApply&&h.weightsApplied&&h.weightsBefore){
-      Object.keys(h.weightsApplied).forEach(function(k){
-        if(k==='bias') return;
-        var delta=(h.weightsApplied[k]||0)-(h.weightsBefore[k]||0);
-        if(Math.abs(delta)>=0.01) sigChanges.push({k:k,delta:delta});
-      });
-      sigChanges.sort(function(a,b){return Math.abs(b.delta)-Math.abs(a.delta);});
-    }
 
-    // Hit rate before vs after
-    var afterPreds=h.predIdAtTime?preds.filter(function(p){
-      return p.status!=='pending'&&p.outcome&&p.modelVerId&&p.modelVerId>=h.id;
-    }):[];
-    var beforePreds=preds.filter(function(p){
-      return p.status!=='pending'&&p.outcome&&(!p.modelVerId||p.modelVerId<h.id);
-    });
-    function calcRate(ps){
-      var h2=0,t=0;
-      ps.forEach(function(p){Object.values(p.outcome).forEach(function(v){t++;if(v==='hit')h2++;});});
-      return t>=3?Math.round(h2/t*100):null;
-    }
-    var rateAfter=calcRate(afterPreds);
-    var rateBefore=calcRate(beforePreds);
-    var rateDelta=rateAfter!==null&&rateBefore!==null?rateAfter-rateBefore:null;
-
-    return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
-      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
-        +'<span style="font-size:13px">'+icon+'</span>'
-        +'<span style="font-size:12px;font-weight:700;color:'+col+'">'+(isApply?'Applied':'Held')+'</span>'
-        +'<span style="font-size:11px;color:var(--muted);margin-left:auto">'+h.date+'</span>'
-      +'</div>'
-      // Backtest result at decision time
-      +(h.btDiff!==null?'<div style="font-size:11px;color:var(--muted);margin-bottom:3px">'
-        +'Backtest at decision: '
-        +'<span style="color:'+(h.btDiff>0?'var(--green)':h.btDiff<0?'var(--red)':'var(--muted)')+';font-family:var(--mono);font-weight:700">'
-        +(h.btDiff>0?'\u2191+':h.btDiff<0?'\u2193':'\u2014')+h.btDiff+'%'
-        +'</span>'
-        +' over '+(h.btN||'?')+' refills'
-      +'</div>':'')
-      // Signal changes
-      +(sigChanges.length?'<div style="font-size:10px;color:var(--muted);margin-bottom:3px">'
-        +sigChanges.slice(0,3).map(function(s){
-          return '<span style="color:'+(s.delta>0?'var(--green)':'var(--red)')+'">'
-            +(SIGNAL_NAMES[s.k]||s.k)+' '+(s.delta>0?'\u2191':'\u2193')
-            +'</span>';
-        }).join(' \u00B7 ')
-      +'</div>':'')
-      // Hit rate before vs after
-      +(rateBefore!==null||rateAfter!==null?'<div style="font-size:11px;color:var(--muted)">'
-        +(rateBefore!==null?'Before: <span style="font-family:var(--mono);color:var(--text)">'+rateBefore+'%</span>':'')
-        +(rateAfter!==null?' \u00B7 After: <span style="font-family:var(--mono);color:'+(rateDelta>0?'var(--green)':rateDelta<0?'var(--red)':'var(--text)')+'">'+rateAfter+'%</span>':'')
-        +(rateDelta!==null?' <span style="color:'+(rateDelta>0?'var(--green)':rateDelta<0?'var(--red)':'var(--muted)')+'">'+(rateDelta>0?'\u2191+':'\u2193')+rateDelta+'%</span>':'')
-      +'</div>':'')
-    +'</div>';
-  }).join('');
-}
-
-function renderBestPredList(){
-  var el=document.getElementById('best-pred-list');
-  if(!el||!activeShop) return;
-  db=loadDB();
-  var preds=shopPreds(activeShop).filter(function(p){
-    return p.status!=='pending'&&p.outcome&&p.weightsAtTime&&Object.keys(p.weightsAtTime).length>0;
-  });
-  if(!preds.length){
-    el.innerHTML='<div class="muted" style="font-size:12px">No resolved predictions with saved weights yet</div>';
-    return;
-  }
-  function hitRate(p){var h=0,t=0;Object.values(p.outcome).forEach(function(v){t++;if(v==='hit')h++;});return t?h/t:0;}
-  var pinned=db.shops[activeShop].pinnedPredId;
-  var currentW=getWeights(activeShop);
-  var candidates=preds.slice().sort(function(a,b){return hitRate(b)-hitRate(a);}).slice(0,5);
-
-  // Phase 1: render immediately with single-prediction rates
-  function rowHTML(p, btInfo){
-    var h=Object.values(p.outcome).filter(function(v){return v==='hit';}).length;
-    var r=Math.round(hitRate(p)*100);
-    var d=(p.actualDate||p.createdDate||'').slice(5);
-    var isPinned=String(p.id)===String(pinned);
-    var btHTML='';
-    if(btInfo){
-      var btCol=btInfo.diff>0?'var(--green)':btInfo.diff<0?'var(--red)':'var(--muted)';
-      var diffStr=btInfo.diff>0?'\u2191+'+btInfo.diff+'%':btInfo.diff<0?'\u2193'+btInfo.diff+'%':'= No diff';
-      btHTML='<span style="font-family:var(--mono);font-weight:900;color:var(--text)">'+btInfo.rate+'%</span>'
-        +' <span style="font-size:10px;color:var(--muted)">'+btInfo.n+' refills</span>'
-        +' <span style="color:'+btCol+';font-size:10px">'+diffStr+'</span>';
-    } else {
-      btHTML='<span style="font-size:10px;color:var(--muted)">computing\u2026</span>';
-    }
-    return '<div id="bprow-'+p.id+'" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">'
-      +'<div style="flex:1">'
-        +'<div style="font-size:10px;color:var(--muted);margin-bottom:1px">Backtest '+btHTML+'</div>'
-        +'<div>'
-          +'<span class="mono" style="font-size:11px;color:var(--muted)">'+h+'/'+p.predictedCodes.length+' on '+d+'</span>'
-          +(isPinned?'<span style="font-size:10px;color:var(--gold);margin-left:6px">&#x2605; anchored</span>':'')
-        +'</div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:1px">'
-          +p.predictedCodes.map(function(c){
-            return '<span style="color:'+(p.outcome[c]==='hit'?'var(--green)':'var(--muted)')+'">'+c+'</span>';
-          }).join(' ')
-        +'</div>'
-      +'</div>'
-      +'<button class="btn btn-secondary btn-sm" '
-        +'style="'+(isPinned?'border-color:var(--gold);color:var(--gold)':'')+'" '
-        +'onclick="useBestPredModel(\''+p.id+'\')">'
-        +(isPinned?'&#x2605; Anchored':'Use this')
-      +'</button>'
-    +'</div>';
-  }
-
-  // Render immediately
-  el.innerHTML=candidates.map(function(p){return rowHTML(p,p.btCache||null);}).join('');
-
-  // Phase 2: backtest each row lazily — skip if already cached
-  // Cache current model once for all anchor comparisons
-  var currentCacheKey='current-'+activeShop;
-  var currentBTCache=db.shops[activeShop].currentBTCache||{};
-
-  candidates.forEach(function(p, idx){
-    if(p.btCache){return;} // already computed — skip
-    setTimeout(function(){
-      db=loadDB();
-      var fromDate=p.actualDate||p.createdDate;
-
-      // Use cached current model result if same fromDate
-      var cachedCur=currentBTCache[fromDate];
-      if(!cachedCur){
-        var btCurResult=backtestWeights(activeShop,currentW,fromDate);
-        cachedCur={rate:btCurResult?btCurResult.hitRate:null,n:btCurResult?btCurResult.detail.length:0};
-        currentBTCache[fromDate]=cachedCur;
-        db.shops[activeShop].currentBTCache=currentBTCache;
-      }
-
-      var bt=backtestWeights(activeShop,p.weightsAtTime,fromDate);
-      var btInfo=bt?{
-        rate:bt.hitRate,
-        n:bt.detail.length,
-        diff:cachedCur.rate!==null?bt.hitRate-cachedCur.rate:null
-      }:null;
-
-      // Cache on prediction object so next open is instant
-      if(btInfo){
-        db=loadDB();
-        var pred2=db.shops[activeShop].predictions.find(function(q){return q.id===p.id;});
-        if(pred2){pred2.btCache=btInfo; saveDB(db);}
-      }
-
-      var row=document.getElementById('bprow-'+p.id);
-      if(row) row.outerHTML=rowHTML(p,btInfo);
-    }, idx*400); // 400ms apart — gives buildWeightedScoreDirect time to finish
-  });
-}
-
-function backtestWeights(letter, weights, fromDate){
+function backtestWeights(letter, weights, fromDate, periodFromDate){
   // Two-dimensional weighting: recency (0.92 decay) × regime (stable=1.0, shift=0.6)
+  // periodFromDate: if set, only backtest predictions from this date forward (regime-period mode)
   db=loadDB();
   var entries=shopEntries(letter).slice().sort(function(a,b){return a.date.localeCompare(b.date);});
   var preds=shopPreds(letter);
   var fromIdx=entries.findIndex(function(e){return e.date>fromDate;});
   if(fromIdx<3) return null;
+  // In period mode, further restrict to entries after period start
+  var periodIdx=periodFromDate
+    ?Math.max(fromIdx,entries.findIndex(function(e){return e.date>=periodFromDate;}))
+    :fromIdx;
+  if(periodIdx<0||periodIdx>=entries.length-1) periodIdx=fromIdx;
   var hits=0,total=0,weightedHits=0,weightedTotal=0,detail=[];
-  for(var i=fromIdx;i<entries.length-1;i++){
+  for(var i=periodIdx;i<entries.length-1;i++){
     var trainEntries=entries.slice(0,i);
     var actual=entries[i].codes;
     var scores=buildWeightedScoreDirect(trainEntries, weights);
     var top5=Object.entries(scores).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
     var h=top5.filter(function(c){return actual.indexOf(c)>-1;}).length;
-    // Recency weight
     var stepsFromEnd=entries.length-2-i;
     var recencyW=Math.pow(0.92, stepsFromEnd);
-    // Regime weight: find prediction made at this entry
     var entryDate=entries[i].date;
     var prevDate=i>0?entries[i-1].date:'';
     var predAtDate=preds.filter(function(p){
@@ -5001,7 +4261,8 @@ function backtestWeights(letter, weights, fromDate){
   }
   var hitRate=total?Math.round(hits/total*100):0;
   var weightedRate=weightedTotal>0?Math.round(weightedHits/weightedTotal*100):hitRate;
-  return {hits:hits,total:total,hitRate:weightedRate,rawHitRate:hitRate,detail:detail};
+  return {hits:hits,total:total,hitRate:weightedRate,rawHitRate:hitRate,
+    detail:detail,periodMode:!!periodFromDate};
 }
 
 function buildSequentialCooccur(entries){
@@ -5085,12 +4346,14 @@ function useBestPredModel(predId){
   if(!pred||!pred.weightsAtTime) return;
   var fromDate=pred.actualDate||pred.createdDate;
 
-  // Backtest anchor weights vs current weights from anchor date forward
-  var anchorTest=backtestWeights(activeShop,pred.weightsAtTime,fromDate);
+  // Use cached backtest if available — computed by Learner in background
+  // Only run live backtest if cache missing (explicit user action — acceptable)
+  var cached=pred.btCache||null;
+  var anchorTest=cached?{hitRate:cached.rate,detail:{length:cached.n}}:backtestWeights(activeShop,pred.weightsAtTime,fromDate);
   var currentWeights=getWeights(activeShop);
-  var currentTest=backtestWeights(activeShop,currentWeights,fromDate);
-  var diff=anchorTest&&currentTest?anchorTest.hitRate-currentTest.hitRate:null;
-  var btN=anchorTest?anchorTest.detail.length:0;
+  var currentTest=cached?{hitRate:cached.rate-cached.diff}:backtestWeights(activeShop,currentWeights,fromDate);
+  var diff=anchorTest&&currentTest?Math.round(anchorTest.hitRate-currentTest.hitRate):null;
+  var btN=cached?cached.n:(anchorTest?anchorTest.detail.length:0);
 
   // Cache result on prediction object so next open is instant
   db=loadDB();
@@ -5271,9 +4534,43 @@ function onRebuildDone(letter, count){
   var el=document.getElementById('rebuild-result');
   if(el) el.innerHTML='<div class="alert alert-ok">&#x2705; '+letter+' rebuilt \u2014 '+count+' predictions generated</div>';
   renderShopPills();
-  // Run learner immediately after rebuild so alert is ready
+  // Safety net: if pending prediction has empty frozenCodeData, fill it now
   setTimeout(function(){
+    db=loadDB();
+    var pending=(shopPreds(letter)||[]).filter(function(p){return p.status==='pending';})[0];
+    if(pending&&!Object.keys(pending.frozenCodeData||{}).length){
+      var entries=shopEntries(letter);
+      var preds=shopPreds(letter);
+      var weights=pending.weightsAtTime||getWeights(letter);
+      var frozen=pending.frozenScores||pending.scores||{};
+      var fullMax=Math.max.apply(null,Object.values(frozen).concat([0.001]));
+      var snapByCode={};
+      if(pending.frozenSnapshots){
+        var isC=!!(pending.frozenSnapshots&&pending.modelVersion);
+        snapByCode=decompressSnap(getSnapshotForPred(pending),isC);
+      }
+      var fcd={};
+      pending.predictedCodes.forEach(function(c){
+        var pct=Math.round((frozen[c]||0)/fullMax*100);
+        var snap=snapByCode[c]||{};
+        var g=entries.length>=3
+          ?buildCodeConfidenceGrade(c,snap,weights,entries,preds,letter,pct)
+          :{grade:'N',col:'var(--muted)',adapted:false};
+        var hr=buildCodeHitRate(c,preds);
+        var combined=hr?Math.round(pct*0.5+hr.rate*0.5):pct;
+        var consensus=buildSignalConsensus(c,snap,weights,weights);
+        var topDriving=consensus.yesSignals.slice(0,2).map(function(k){return SIGNAL_NAMES&&SIGNAL_NAMES[k]||k;}).join(' \u00B7 ');
+        var obsWindow=db.shops[letter]&&db.shops[letter].obsWindow||{};
+        fcd[c]={grade:g.grade,gradeCol:g.col,adapted:!!g.adapted,combined:combined,
+                hrRate:hr?hr.rate:null,hrN:hr?hr.predicted:null,
+                topDriving:topDriving,topSignalKey:consensus.yesSignals[0]||null,
+                obsState:(obsWindow[c]&&obsWindow[c].state)||'idle'};
+      });
+      var dbPred=(db.shops[letter].predictions||[]).find(function(p){return p.id===pending.id;});
+      if(dbPred){dbPred.frozenCodeData=fcd;saveDB(db);}
+    }
     runBackgroundLearner(letter);
+    precomputeAnchorCache(letter, getWeights(letter));
     if(activeTab==='predict') renderPredictTab();
     if(activeTab==='track')   renderTrackTab();
   }, 100);
@@ -5331,9 +4628,13 @@ if(Object.keys(cs).length)compactSnaps[c]=cs;
 var predId=Date.now();
 saveSnapshot(predId,compactSnaps);
 var regimeNow=detectRegimeShift(allEntries);
-var top5CodesRebuild=finalTop5.map(function(x){return x[0];});
-var frozenSummaryRebuild=buildPlainEnglishSummary(allEntries,db.shops[letter].predictions||[],top5CodesRebuild,finalResult,letter)||'';
-var frozenConfRebuild=buildRefillConfidenceScore(allEntries,db.shops[letter].predictions||[],top5CodesRebuild,finalResult,letter)||null;
+var allPredsSoFar=db.shops[letter].predictions||[];
+// Sort codes by grade at freeze time
+var snapByCodeRebuild={};Object.keys(compactSnaps).forEach(function(c){var s=compactSnaps[c];var d={};Object.keys(s).forEach(function(k){d[k]=s[k]/100;});snapByCodeRebuild[c]=d;});
+var top5CodesRebuild=sortCodesByGrade(finalTop5.map(function(x){return x[0];}),fNorm,snapByCodeRebuild,finalResult.weights,allEntries,allPredsSoFar,letter,finalResult.shopConf,finalResult.regime);
+var frozenCodeDataRebuild=lastSortCodeData;
+var frozenSummaryRebuild=buildPlainEnglishSummary(allEntries,allPredsSoFar,top5CodesRebuild,finalResult,letter)||'';
+var frozenConfRebuild=buildRefillConfidenceScore(allEntries,allPredsSoFar,top5CodesRebuild,finalResult,letter)||null;
 db.shops[letter].predictions.push({
 id:predId,createdDate:allEntries[allEntries.length-1].date,
 modelVersion:SIGNAL_VERSION,
@@ -5343,6 +4644,7 @@ regimeAtTime:{shifting:regimeNow.shifting,overlapScore:regimeNow.overlapScore,no
 scores:finalTop5.reduce(function(o,x){o[x[0]]=Math.round(x[1]/fMax*100);return o;},{}),
 frozenScores:fNorm,
 frozenSnapshots:compactSnaps,
+frozenCodeData:frozenCodeDataRebuild,
 frozenSummary:frozenSummaryRebuild,
 frozenConf:frozenConfRebuild,
 weightsAtTime:Object.assign({},finalResult.weights),
@@ -5391,15 +4693,25 @@ Object.keys(result.scores).forEach(function(c){normScores[c]=Math.round(result.s
 var predId2=Date.now();
 saveSnapshot(predId2,compactSnaps2);
 var regimeNow2=detectRegimeShift(trainEntries);
+// Surprise codes: appeared but not predicted — store for Learner analysis
+var surpriseCodes2=nextEntry.codes.filter(function(c){
+  return top5.every(function(x){return x[0]!==c;});
+});
+// Sort codes by grade at freeze time
+var snapByCode2={};Object.keys(compactSnaps2).forEach(function(c){var s=compactSnaps2[c];var d={};Object.keys(s).forEach(function(k){d[k]=s[k]/100;});snapByCode2[c]=d;});
+var sortedTop5Codes=sortCodesByGrade(top5.map(function(x){return x[0];}),normScores,snapByCode2,result.weights,trainEntries,shopPreds(letter),letter,result.shopConf,result.regime);
+var frozenCodeData2=lastSortCodeData;
 var pred={
 id:predId2,createdDate:trainEntries[trainEntries.length-1].date,
 modelVersion:SIGNAL_VERSION,
-predictedCodes:top5.map(function(x){return x[0];}),
+predictedCodes:sortedTop5Codes,
 promotedCodes:[],patternRules:[],watchoutCodes:[],
+surpriseCodes:surpriseCodes2,
 triggeredOutcome:{},regimeAtTime:{shifting:regimeNow2.shifting,overlapScore:regimeNow2.overlapScore,note:regimeNow2.note||''},
 scores:top5.reduce(function(o,x){o[x[0]]=Math.round(x[1]/top5Max*100);return o;},{}),
 frozenScores:normScores,
 frozenSnapshots:compactSnaps2,
+frozenCodeData:frozenCodeData2,
 weightsAtTime:Object.assign({},result.weights),
 status:resolveStatus(outcome),
 outcome:outcome,
@@ -5442,117 +4754,28 @@ var rebuildPredictions=function(letter){
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // PREDCARDHTML \u2014 updated to accept frozen training data
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-function predCardHTML(pred, canResolve, trainEntries, trainPreds){
-  var sColors={pending:'var(--muted)',hit:'var(--green)',partial:'var(--gold)',miss:'var(--red)'};
-  var sLabels={pending:'\u23F3 Pending',hit:'&#x2705; Hit',partial:'&#x26A1; Partial',miss:'&#x274C; Miss'};
 
-  // Use frozenScores for all codes (never top-5-only scores)
-  var frozenScores=pred.frozenScores||{};
-  var scores=pred.scores||{};
-  var allScores={};
-  Object.keys(frozenScores).forEach(function(c){allScores[c]=frozenScores[c];});
-  Object.keys(scores).forEach(function(c){if(!allScores[c]) allScores[c]=scores[c];});
-  var maxScore=Math.max.apply(null,Object.values(allScores).concat([1]));
-
-  // Build code list from frozen prediction data only
-  var seen=new Set();
-  var allCodes=[];
-  function addCode(c,type){if(seen.has(c))return;seen.add(c);allCodes.push({c:c,type:type});}
-  (pred.predictedCodes||[]).forEach(function(c){addCode(c,'top5');});
-  (pred.promotedCodes||[]).filter(function(c){return pred.predictedCodes.indexOf(c)===-1;}).forEach(function(c){addCode(c,'promoted');});
-  (pred.watchoutCodes||[]).filter(function(c){return pred.predictedCodes.indexOf(c)===-1;}).forEach(function(c){addCode(c,'watchout');});
-  if(pred.actualCodes&&pred.outcome){
-    pred.actualCodes.filter(function(c){return !seen.has(c);}).forEach(function(c){addCode(c,'surprise');});
-  }
-
-  var typeIcon={top5:'',promoted:'&#x1F52C;',watchout:'&#x26A0;&#xFE0F;',surprise:'&#x1F3AF;'};
-  var typeCol={top5:'var(--text)',promoted:'var(--green)',watchout:'var(--gold)',surprise:'var(--teal)'};
-
-  var wts=pred.weightsAtTime||DEFAULT_WEIGHTS;
-  var te=trainEntries||[];
-  var tp=trainPreds||[];
-
-  // Split codes into top5 and extra (promoted/watchout/surprise)
-  var top5Pills=allCodes.filter(function(x){return x.type==='top5';});
-  var extraCodes=allCodes.filter(function(x){return x.type!=='top5';});
-
-  function makeRow(entry,i,allArr){
-    var c=entry.c, type=entry.type;
-    var outcome=pred.outcome?pred.outcome[c]:null;
-    if(!outcome&&pred.triggeredOutcome&&pred.triggeredOutcome[c]) outcome=pred.triggeredOutcome[c].appeared?'hit':'miss';
-    if(!outcome&&pred.actualCodes) outcome=pred.actualCodes.indexOf(c)>-1?'hit':'miss';
-    var isHit=outcome==='hit',isMiss=outcome==='miss';
-    var outcomeCol=isHit?'var(--green)':isMiss?'var(--red)':'var(--muted)';
-    var icon=isHit?'&#x2713;':isMiss?'&#x2717;':'&#xB7;';
-    var scorePct=maxScore>0?Math.round((allScores[c]||0)/maxScore*100):0;
-    var allPredSnap=getSnapshotForPred(pred);
-    var isCompactSnap=!!(pred.frozenSnapshots&&pred.modelVersion);
-    var decompAllSnap=decompressSnap(allPredSnap,isCompactSnap);
-    var rawSnap=decompAllSnap[c]||{};
-    var grade=te.length>=3?buildCodeConfidenceGrade(c,rawSnap,wts,te,tp,activeShop,scorePct):{grade:'\u2014',col:'var(--muted)'};
-    // Combined % using only predictions resolved before this one (tp)
-    var hrHist=buildCodeHitRate(c,tp);
-    var combinedPct=hrHist?Math.round(scorePct*0.5+hrHist.rate*0.5):scorePct;
-    var combinedCol=combinedPct>=60?'var(--green)':combinedPct>=35?'var(--gold)':'var(--red)';
-    var codeColor=type==='top5'?(isHit?'var(--green)':isMiss?'var(--red)':'var(--text)'):typeCol[type];
-    return '<div style="display:flex;align-items:center;gap:5px;padding:3px 0">'
-      +(typeIcon[type]?'<span style="font-size:10px;min-width:16px">'+typeIcon[type]+'</span>':'<span style="min-width:16px"></span>')
-      +'<span class="mono" style="font-size:13px;font-weight:900;min-width:28px;color:'+codeColor+'">'+c+'</span>'
-      +(outcome?'<span style="font-size:11px;font-weight:700;color:'+outcomeCol+'">'+icon+'</span>':'<span style="min-width:12px"></span>')
-      +'<span style="font-size:10px;font-weight:900;font-family:var(--mono);color:'+grade.col+'">['+grade.grade+']</span>'
-      +'<div style="flex:1;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden">'
-        +'<div style="width:'+combinedPct+'%;height:100%;background:'+(isHit?'var(--green)':isMiss?'var(--red)':combinedCol)+';border-radius:2px"></div>'
-      +'</div>'
-      +'<span style="font-size:10px;font-family:var(--mono);color:'+(isHit?'var(--green)':isMiss?'var(--red)':combinedCol)+';font-weight:700;min-width:28px;text-align:right">'+combinedPct+'%</span>'
-      +'</div>';
-  }
-
-  var top5Html=top5Pills.map(function(e,i){return makeRow(e,i,top5Pills);}).join('');
-
-  // Extra codes collapsible
-  var extraHtml='';
-  if(extraCodes.length){
-    var uid='ex-'+pred.id;
-    var extraRows=extraCodes.map(function(e,i){return makeRow(e,i,extraCodes);}).join('');
-    var extraLabel=[];
-    var nPromo=extraCodes.filter(function(x){return x.type==='promoted';}).length;
-    var nWatch=extraCodes.filter(function(x){return x.type==='watchout';}).length;
-    var nSurp=extraCodes.filter(function(x){return x.type==='surprise';}).length;
-    if(nPromo) extraLabel.push('&#x1F52C;'+nPromo);
-    if(nWatch) extraLabel.push('&#x26A0;'+nWatch);
-    if(nSurp)  extraLabel.push('&#x1F3AF;'+nSurp);
-    extraHtml='<div style="border-top:1px dashed var(--border);margin-top:4px">'
-      +'<div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.xarrow\').textContent=this.nextElementSibling.style.display===\'none\'?\'&#x25BE;\':\'&#x25B4;\'" '
-      +'style="display:flex;align-items:center;gap:6px;padding:4px 0;cursor:pointer;color:var(--muted);font-size:10px;font-weight:700">'
-      +extraLabel.join(' ')
-      +'<span class="xarrow" style="margin-left:auto">&#x25BE;</span>'
-      +'</div>'
-      +'<div style="display:none">'+extraRows+'</div>'
-      +'</div>';
-  }
-
-  var top5H=pred.predictedCodes?(pred.predictedCodes.filter(function(c){return pred.outcome&&pred.outcome[c]==='hit';}).length):0;
-  var top5T=pred.predictedCodes?pred.predictedCodes.length:0;
-  var hRate=top5T?Math.round(top5H/top5T*100):0;
-  var hCol=hRate===100?'var(--green)':hRate>=40?'var(--gold)':'var(--red)';
-  var statusCol=sColors[pred.status]||'var(--muted)';
-  var dateStr=(pred.actualDate||pred.createdDate||'').slice(5);
-
-  return '<div style="padding:10px 0;border-bottom:1px solid var(--border)">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
-      +'<span class="mono muted" style="font-size:11px">'+dateStr+'</span>'
-      +'<span style="font-size:12px;font-weight:700;color:'+statusCol+'">'+sLabels[pred.status]+'</span>'
-      +(pred.outcome?'<span class="mono" style="font-size:12px;font-weight:900;color:'+hCol+'">'+hRate+'%</span>':'')
-    +'</div>'
-    +top5Html
-    +extraHtml
-    +(canResolve?'<button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="openResolveModal(\''+pred.id+'\')">Resolve</button>':'')
-    +'</div>';
-}
 
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 // SAVE REFILL (reimplemented clean)
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+function forceSaveEntry(date){
+  var codes=window._pendingCodes;
+  if(!codes||!activeShop) return;
+  window._pendingCodes=null;
+  var resolveResult=addEntry(activeShop,date,codes,'text');
+  renderShopPills(); renderArchive();
+  document.getElementById('text-input').value='';
+  document.getElementById('tag-grid').innerHTML='';
+  var resultEl=document.getElementById('entry-result');
+  if(resultEl){
+    resultEl.innerHTML='<div class="alert alert-ok">&#x2705; Saved</div>';
+    setTimeout(function(){if(resultEl)resultEl.innerHTML='';},3000);
+  }
+  if(activeTab==='predict') setTimeout(renderPredictTab,100);
+  if(activeTab==='track')   setTimeout(renderTrackTab,100);
+}
+
 function saveTextEntry(){
   if(!activeShop){showToast('Select a shop first');return;}
   var date=document.getElementById('entry-date').value||todayStr();
@@ -5566,6 +4789,16 @@ function saveTextEntry(){
   var dup=isDuplicateInShop(activeShop,date,codes);
   if(dup){
     if(resultEl) resultEl.innerHTML='<div class="alert alert-warn">Duplicate \u2014 '+date+' already saved: '+dup.codes.join(' ')+'</div>';
+    return;
+  }
+  // Warn if same codes already saved in another shop on same date
+  var sig=refillSig(codes);
+  var crossShop=Object.keys(db.shops||{}).filter(function(s){
+    return s!==activeShop && shopEntries(s).find(function(e){return e.date===date&&refillSig(e.codes)===sig;});
+  });
+  if(crossShop.length){
+    if(resultEl) resultEl.innerHTML='<div class="alert alert-warn">Warning \u2014 same codes already saved in '+crossShop.join(', ')+' on '+date+'. Save anyway? <button class="btn btn-primary btn-sm" onclick="forceSaveEntry(\''+date+'\')">Save anyway</button></div>';
+    window._pendingCodes=codes;
     return;
   }
   var resolveResult=addEntry(activeShop,date,codes,'text');
@@ -5592,32 +4825,808 @@ function saveTextEntry(){
 
 
 
-(function init(){
-  db=loadDB();
-  checkStorageHealth();
-  // Set entry date to today
-  var d=document.getElementById('entry-date');
-  if(d) d.value=todayStr();
-  renderShopPills();
-  restoreSectionStates();
-  var shops=Object.keys(db.shops).sort();
-  if(shops.length){
-    selectShop(shops[0]);
-  } else {
-    renderDataTab();
-  }
-  // Event delegation for entry delete
-  document.addEventListener('click',function(e){
-    var t=e.target;
-    if(t.dataset.delEntry) deleteEntry(t.dataset.delEntry);
-    if(t.dataset.resolvePred) openResolveModal(t.dataset.resolvePred);
-  });
-})();
+
 
 function rebuildActiveShop(){
 if(!activeShop){showToast('Select a shop first');return;}
 rebuildPredictions(activeShop);
 }
+
+
+
+// DISPLAY — pure readers, zero computation
+// ════════════════════════════════════════════════════════════════
+// LAYER 3 — DISPLAY
+// Law: zero computation. Every value from frozen prediction fields.
+// No fallbacks. If frozenCodeData is null, show [—].
+// ════════════════════════════════════════════════════════════════
+
+var activeTab  = 'data';
+
+// ── Navigation ───────────────────────────────────────────────
+
+
+
+
+
+
+
+
+// ── Shop pills ────────────────────────────────────────────────
+
+
+// ── DATA tab ─────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+// ════════════════════════════════════════════════════════════════
+// PREDICT TAB — reads frozen pending prediction only
+// ════════════════════════════════════════════════════════════════
+
+
+// ── Prediction codes — pure reader ───────────────────────────
+
+
+// ── Signal performance — from stored analysis ─────────────────
+
+
+// ── Learner alert — from stored learnerAlert ──────────────────
+
+
+// ════════════════════════════════════════════════════════════════
+// TRACK TAB — reads frozen predictions only
+// TRACK top uses getCurrentPred — same source as PREDICT
+// ════════════════════════════════════════════════════════════════
+
+
+// ── TRACK top — single source, same as PREDICT ───────────────
+
+
+// ── TRACK history — reads frozen resolved predictions ─────────
+
+
+// ── Optimize / Anchor — reads btCache only ────────────────────
+
+
+// ── Model history ─────────────────────────────────────────────
+
+
+// ── Learner actions ───────────────────────────────────────────
+
+
+
+
+// ── Init ──────────────────────────────────────────────────────
+
+
+window.addEventListener('DOMContentLoaded', initApp);
+
+
+</script>
+<script>
+// ════════════════════════════════════════════════════════════════
+// LAYER 3 — DISPLAY
+// Law: zero computation. Every value from frozen prediction fields.
+// No fallbacks. If frozenCodeData is null, show [—].
+// ════════════════════════════════════════════════════════════════
+
+var activeShop = null;
+var activeTab  = 'data';
+var archShowAll = false;
+
+// ── Navigation ───────────────────────────────────────────────
+var showTab = function(tab){
+  activeTab=tab;
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
+  var panel=document.getElementById('panel-'+tab);
+  var btn=document.getElementById('nav-'+tab);
+  if(panel) panel.classList.add('active');
+  if(btn)   btn.classList.add('active');
+  if(tab==='data')    renderDataTab();
+  if(tab==='predict'){ renderPredictTab(); if(activeShop) setTimeout(function(){runBackgroundLearner(activeShop);precomputeAnchorCache(activeShop,getWeights(activeShop));},100); }
+  if(tab==='track')   renderTrackTab();
+}
+
+var selectShop = function(s){
+  activeShop=s;
+  renderShopPills();
+  var btn=document.getElementById('rebuild-active-btn');
+  if(btn) btn.style.display=activeShop?'inline-flex':'none';
+  if(activeTab==='predict'){ renderPredictTab(); setTimeout(function(){runBackgroundLearner(s);precomputeAnchorCache(s,getWeights(s));},100); }
+  if(activeTab==='track')   renderTrackTab();
+  if(activeTab==='data')    renderDataTab();
+}
+
+var updateAllBanners = function(){ renderShopPills(); }
+
+var toggleSection = function(id){
+  var body=document.getElementById('sec-'+id);
+  var title=document.getElementById('sec-title-'+id);
+  if(!body||!title) return;
+  var collapsed=body.classList.contains('collapsed');
+  if(collapsed){
+    body.classList.remove('collapsed');
+    body.style.maxHeight=body.scrollHeight+'px';
+    title.classList.remove('collapsed');
+    setTimeout(function(){body.style.maxHeight='';},350);
+  } else {
+    body.style.maxHeight=body.scrollHeight+'px';
+    setTimeout(function(){body.style.maxHeight='0px';body.classList.add('collapsed');title.classList.add('collapsed');},10);
+  }
+  try{var st=JSON.parse(localStorage.getItem('sec_state')||'{}');st[id]=collapsed;localStorage.setItem('sec_state',JSON.stringify(st));}catch(e){}
+}
+
+// ── Shop pills ────────────────────────────────────────────────
+var renderShopPills = function(){
+  var el=document.getElementById('shop-pills-inner');
+  if(!el) return;
+  db=loadDB();
+  var shops=Object.keys(db.shops||{}).sort();
+  el.innerHTML=shops.map(function(s){
+    var cls='shop-pill'+(s===activeShop?' active':'');
+    return '<button class="'+cls+'" onclick="selectShop(\''+s+'\')">'+s+'</button>';
+  }).join('')+'<button class="shop-pill add-shop-btn" onclick="showAddShop()">+</button>';
+}
+
+// ── DATA tab ─────────────────────────────────────────────────
+var renderDataTab = function(){
+  renderArchive();
+  renderShopManageList();
+  renderStorageHealth();
+}
+
+var renderArchive = function(){
+  var el=document.getElementById('archive-list');
+  var cnt=document.getElementById('archive-count');
+  if(!el||!activeShop) return;
+  db=loadDB();
+  var entries=shopEntries(activeShop).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+  if(cnt) cnt.textContent=entries.length;
+  var display=archShowAll?entries:entries.slice(0,20);
+  el.innerHTML=display.map(function(e){
+    return '<div style="display:flex;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);align-items:baseline">'
+      +'<span class="mono muted" style="font-size:11px;min-width:40px">'+e.date.slice(5)+'</span>'
+      +'<span style="font-size:12px;color:var(--text);flex:1;line-height:1.6">'+e.codes.join(' ')+'</span>'
+      +'<button onclick="deleteEntry(\''+activeShop+'\',\''+e.date+'\')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0 4px">&#x1F5D1;</button>'
+    +'</div>';
+  }).join('')+(entries.length>20&&!archShowAll
+    ?'<button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="archShowAll=true;renderArchive()">Show all '+entries.length+'</button>':'');
+}
+
+var renderShopManageList = function(){
+  var el=document.getElementById('shop-manage-list');
+  if(!el) return;
+  db=loadDB();
+  var shops=Object.keys(db.shops||{}).sort();
+  el.innerHTML=shops.map(function(s){
+    var n=(db.shops[s].entries||[]).length;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">'
+      +'<span class="mono" style="font-weight:900;min-width:40px;color:var(--accent)">'+s+'</span>'
+      +'<span style="font-size:11px;color:var(--muted)">'+n+' entries</span>'
+      +'<div style="margin-left:auto;display:flex;gap:6px">'
+        +'<button class="btn btn-secondary btn-sm" onclick="renameShop(\''+s+'\')">Rename</button>'
+        +'<button class="btn btn-danger btn-sm" onclick="deleteShop(\''+s+'\')">Delete</button>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+
+var renderStorageHealth = function(){
+  var el=document.getElementById('storage-health-bar');
+  if(!el) return;
+  var kb=Math.round((localStorage.getItem('inv_intel_v4')||'').length/1024);
+  var pct=Math.min(Math.round(kb/5120*100),100);
+  var col=pct>80?'var(--red)':pct>60?'var(--gold)':'var(--green)';
+  el.innerHTML='<div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;margin-bottom:4px"><div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div><div style="font-size:10px;color:var(--muted)">'+kb+' KB / 5120 KB ('+pct+'%)</div>';
+}
+
+// ════════════════════════════════════════════════════════════════
+// PREDICT TAB — reads frozen pending prediction only
+// ════════════════════════════════════════════════════════════════
+var renderPredictTab = function(){
+  var ids=['refill-confidence','plain-english','prediction-codes','signal-perf-panel','pairs-panel'];
+  if(!activeShop){
+    ids.forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML='<div class="empty"><p>Select a shop</p></div>';});
+    return;
+  }
+  db=loadDB();
+  var preds=shopPreds(activeShop);
+  var entries=shopEntries(activeShop);
+  if(entries.length<3){
+    ids.forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML='<div class="empty"><p>Need 3+ entries</p></div>';});
+    return;
+  }
+
+  // ── Single source of truth ──
+  var cp=getCurrentPred(preds);
+
+  // PREDICT shows pending only — liveResolved means "run rebuild"
+  if(cp.state!=='pending'||!cp.pred){
+    var el=document.getElementById('prediction-codes');
+    if(el) el.innerHTML='<div class="empty"><p>No prediction \u2014 run Rebuild</p></div>';
+    ['refill-confidence','plain-english','signal-perf-panel','pairs-panel']
+      .forEach(function(id){var e=document.getElementById(id);if(e)e.innerHTML='';});
+    renderLearnerAlert(activeShop);
+    return;
+  }
+
+  var pred=cp.pred;
+
+  // ── Confidence — from frozenConf ──
+  var confEl=document.getElementById('refill-confidence');
+  if(confEl){
+    var fc=pred.frozenConf;
+    if(fc&&fc.score){
+      var col=fc.col||'var(--muted)';
+      confEl.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:8px">'
+        +'<span style="font-size:28px;font-weight:900;font-family:var(--mono);color:'+col+'">'+fc.score+'</span>'
+        +'<div><div style="font-size:15px;font-weight:800;color:'+col+'">Grade '+fc.grade+'</div>'
+          +'<div style="font-size:11px;color:var(--muted)">Refill confidence'+(fc.adapted?' <span style="color:var(--green)">&#x2605; adapted</span>':'')+'</div>'
+        +'</div>'
+        +(fc.regimeShifting?'<span class="conf-badge conf-low" style="margin-left:auto">&#x26A1; regime shift</span>':'')
+      +'</div>';
+    } else { confEl.innerHTML=''; }
+  }
+
+  // ── Plain English — from frozenSummary ──
+  var peEl=document.getElementById('plain-english');
+  if(peEl) peEl.innerHTML=pred.frozenSummary
+    ?'<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:6px">'+pred.frozenSummary+'</div>':'';
+
+  // ── Prediction codes — from frozenCodeData ──
+  renderPredictionCodes(pred);
+
+  // ── Signal perf — from stored analysis ──
+  renderSignalPerf(activeShop);
+
+  // ── Learner alert ──
+  renderLearnerAlert(activeShop);
+}
+
+// ── Prediction codes — pure reader ───────────────────────────
+var renderPredictionCodes = function(pred){
+  var el=document.getElementById('prediction-codes');
+  if(!el) return;
+  if(!pred||!pred.predictedCodes||!pred.predictedCodes.length){
+    el.innerHTML='<div class="empty"><p>No prediction</p></div>'; return;
+  }
+  var fcd=pred.frozenCodeData||{};
+  var frozen=pred.frozenScores||pred.scores||{};
+  var fullMax=Math.max.apply(null,Object.values(frozen).concat([0.001]));
+  // If frozenCodeData empty, compute grades now from best available data
+  if(!Object.keys(fcd).length){
+    var allEntries=shopEntries(activeShop);
+    var allPreds=shopPreds(activeShop);
+    var weights=pred.weightsAtTime||getWeights(activeShop);
+    var snapByCode={};
+    if(pred.frozenSnapshots){
+      var isCompact=!!(pred.frozenSnapshots&&pred.modelVersion);
+      var rawSnap=getSnapshotForPred(pred);
+      snapByCode=decompressSnap(rawSnap,isCompact);
+    }
+    pred.predictedCodes.forEach(function(c){
+      var pct=Math.round((frozen[c]||0)/fullMax*100);
+      var snap=snapByCode[c]||{};
+      var g=allEntries.length>=3
+        ?buildCodeConfidenceGrade(c,snap,weights,allEntries,allPreds,activeShop,pct)
+        :{grade:'N',col:'var(--muted)',adapted:false};
+      var hr=buildCodeHitRate(c,allPreds);
+      var combined=hr?Math.round(pct*0.5+hr.rate*0.5):pct;
+      var consensus=buildSignalConsensus(c,snap,weights,weights);
+      var topDriving=consensus.yesSignals.slice(0,2).map(function(k){return SIGNAL_NAMES&&SIGNAL_NAMES[k]||k;}).join(' \u00B7 ');
+      var obsWindow=db.shops[activeShop]&&db.shops[activeShop].obsWindow||{};
+      var obsState=(obsWindow[c]&&obsWindow[c].state)||'idle';
+      fcd[c]={grade:g.grade,gradeCol:g.col,adapted:!!g.adapted,combined:combined,
+              hrRate:hr?hr.rate:null,hrN:hr?hr.predicted:null,
+              topDriving:topDriving,topSignalKey:consensus.yesSignals[0]||null,obsState:obsState};
+    });
+    // Cache on db so next open is instant
+    db=loadDB();
+    var dbPred=db.shops[activeShop]&&(db.shops[activeShop].predictions||[]).find(function(p){return p.id===pred.id;});
+    if(dbPred){dbPred.frozenCodeData=fcd;saveDB(db);}
+  }
+  // Sort codes by grade for display (A→B→C→D→N, then by combined%)
+  var gradeOrd={A:0,B:1,C:2,D:3,N:4};
+  var displayCodes=pred.predictedCodes.slice().sort(function(a,b){
+    var da=fcd[a]||{}; var db2=fcd[b]||{};
+    var ao=gradeOrd[da.grade]!==undefined?gradeOrd[da.grade]:5;
+    var bo=gradeOrd[db2.grade]!==undefined?gradeOrd[db2.grade]:5;
+    if(ao!==bo) return ao-bo;
+    return (db2.combined||0)-(da.combined||0);
+  });
+  function codeRow(c,type){
+    var d=fcd[c]||{};
+    var combined=d.effectivePct!==undefined?d.effectivePct:d.combined!==undefined?d.combined:Math.round((frozen[c]||0)/fullMax*100);
+    var grade=d.grade||'N';
+    var gradeCol=d.gradeCol||'var(--muted)';
+    var adapted=!!d.adapted;
+    var hrRate=d.hrRate; var hrN=d.hrN;
+    var topDriving=d.topDriving||'';
+    var topSigKey=d.topSignalKey||null;
+    var obsState=d.obsState||'idle';
+    var combinedCol=combined>=60?'var(--green)':combined>=35?'var(--gold)':'var(--red)';
+    var barCol=topSigKey&&typeof SIGNAL_COLORS!=='undefined'&&SIGNAL_COLORS[topSigKey]?SIGNAL_COLORS[topSigKey]:combinedCol;
+    var obsLabel=''; var obsCol='var(--muted)';
+    if(obsState==='confirmed'){obsLabel='CONFIRMED';obsCol='var(--green)';}
+    else if(obsState==='watching'){obsLabel='WATCHING';obsCol='var(--gold)';}
+    else if(obsState==='overdue'){obsLabel='OVERDUE';obsCol='var(--red)';}
+    else if(obsState==='recovering'){obsLabel='RECOVERING';obsCol='var(--muted)';}
+    var typeIcon=type==='promoted'?'&#x1F52C;':type==='watchout'?'&#x26A0;&#xFE0F;':'';
+    var codeCol=type==='promoted'?'var(--green)':type==='watchout'?'var(--gold)':'var(--text)';
+    var hrHtml=hrRate!==null&&hrRate!==undefined
+      ?'<span style="color:'+(hrRate>=50?'var(--green)':hrRate>=30?'var(--gold)':'var(--red)')+';font-size:10px;font-family:var(--mono)"> \u00B7 '+hrRate+'%('+hrN+')</span>'
+      :'<span style="color:var(--muted);font-size:10px"> \u00B7 N/A</span>';
+    return '<div class="pred-code-row">'
+      +'<span style="font-size:11px;min-width:16px">'+(typeIcon||'')+'</span>'
+      +'<span class="pred-code" style="color:'+codeCol+'">'+c+'</span>'
+      +'<span class="pred-grade" style="color:'+gradeCol+'">['+grade+']'
+        +(adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')
+        +(obsLabel?'<span style="font-size:8px;color:'+obsCol+';margin-left:3px">'+obsLabel+'</span>':'')
+      +'</span>'
+      +'<div class="pred-bar-track"><div class="pred-bar-fill" style="width:'+combined+'%;background:'+barCol+'"></div></div>'
+      +'<span class="pred-pct" style="color:'+combinedCol+';font-weight:700">'+combined+'%'+hrHtml+'</span>'
+      +'<span class="pred-sigs" style="font-size:9px;color:var(--muted)">'+topDriving+'</span>'
+    +'</div>';
+  }
+
+  var html=displayCodes.map(function(c){return codeRow(c,'top5');}).join('');
+  var promoted=(pred.promotedCodes||[]).filter(function(c){return pred.predictedCodes.indexOf(c)===-1;});
+  if(promoted.length) html+='<div class="pred-divider"></div>'+promoted.map(function(c){return codeRow(c,'promoted');}).join('');
+  var watchouts=(pred.watchoutCodes||[]).filter(function(c){return pred.predictedCodes.indexOf(c)===-1&&promoted.indexOf(c)===-1;});
+  if(watchouts.length) html+='<div class="pred-divider"></div>'+watchouts.map(function(c){return codeRow(c,'watchout');}).join('');
+  el.innerHTML=html;
+}
+
+// ── Signal performance — from stored analysis ─────────────────
+var renderSignalPerf = function(letter){
+  var el=document.getElementById('signal-perf-panel');
+  if(!el||!letter) return;
+  db=loadDB();
+  var analysis=db.shops[letter]&&db.shops[letter].performanceAnalysis;
+  if(!analysis){el.innerHTML=''; return;}
+  var weights=getWeights(letter);
+  var sigEff=analysis.sigEffectiveness||{};
+  var html=(typeof SIGNAL_KEYS!=='undefined'?SIGNAL_KEYS:[]).map(function(k){
+    var w=Math.round((weights[k]||0)*100);
+    var eff=sigEff[k];
+    var lift=eff&&eff.lift!==null?eff.lift:null;
+    var n=eff&&eff.n||0;
+    var dotCol=lift===null?'var(--muted)':lift>0.05?'var(--green)':lift<-0.05?'var(--red)':'var(--muted)';
+    var dotLabel=lift===null?'&#x25A1;':lift>0.05?'&#x25CF;':lift<-0.05?'&#x25CF;':'&#x25CB;';
+    var name=typeof SIGNAL_NAMES!=='undefined'&&SIGNAL_NAMES[k]?SIGNAL_NAMES[k]:k;
+    return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0">'
+      +'<span style="font-size:9px;color:'+dotCol+'">'+dotLabel+'</span>'
+      +'<span style="font-size:11px;min-width:80px;color:var(--text)">'+name+'</span>'
+      +'<div style="flex:1;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden"><div style="width:'+Math.min(w*4,100)+'%;height:100%;background:var(--accent);border-radius:2px"></div></div>'
+      +'<span style="font-size:10px;font-family:var(--mono);color:var(--muted);min-width:28px;text-align:right">'+w+'%</span>'
+      +(n>0?'<span style="font-size:9px;color:var(--muted)">('+n+')</span>':'')
+    +'</div>';
+  }).join('');
+  var missed=analysis.missedOpportunities||[];
+  if(missed.length){
+    html+='<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:4px">MISSED OPPORTUNITIES</div>'
+      +missed.slice(0,3).map(function(m){
+        return '<div style="font-size:11px;color:var(--muted);padding:2px 0"><span class="mono" style="color:var(--gold)">'+m.code+'</span> missed '+m.missCount+'x</div>';
+      }).join('')+'</div>';
+  }
+  el.innerHTML=html;
+}
+
+// ── Learner alert — from stored learnerAlert ──────────────────
+var renderLearnerAlert = function(letter){
+  var el=document.getElementById('learner-alert-panel');
+  if(!el||!letter) return;
+  db=loadDB();
+  var a=db.shops[letter]&&db.shops[letter].learnerAlert;
+  if(!a||!a.readyToSurface||a.applied){el.innerHTML=''; return;}
+  var diff=a.btDiff||0;
+  var col=diff>0?'var(--green)':diff<0?'var(--red)':'var(--muted)';
+  var diffStr=diff>0?'\u2191+'+diff+'%':diff<0?'\u2193'+diff+'%':'= No difference';
+  // Period delta
+  var pDiff=a.btPeriodDiff;
+  var pN=a.btPeriodN||0;
+  var pAgree=a.periodAgreement!==false;
+  var pHtml='';
+  if(pDiff!==null&&pDiff!==undefined&&pN>0){
+    var pCol=pDiff>0?'var(--green)':pDiff<0?'var(--red)':'var(--muted)';
+    var pStr=pDiff>0?'\u2191+'+Math.round(pDiff)+'%':'\u2193'+Math.round(pDiff)+'%';
+    pHtml='<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'
+      +'Current pattern ('+pN+' refills): <span style="font-weight:700;color:'+pCol+'">'+pStr+'</span>'
+      +(!pAgree?'<span style="color:var(--gold);margin-left:6px">\u26A0 pattern disagrees — holding</span>':'')
+    +'</div>';
+  }
+  // Missed in current period
+  var periodMissed=(a.periodMissedOpps||[]).map(function(m){return m.code+'('+m.missCount+'x)';}).join(', ');
+  var allMissed=(a.missedOpportunities||[]).map(function(m){return m.code+'('+m.missCount+'x)';}).join(', ');
+  var relief=(a.proposedRelief||[]).join(', ');
+  var decision=diff>0&&pAgree?'Apply':'Hold';
+  el.innerHTML='<div style="background:var(--surface2);border:1px solid '+col+';border-radius:8px;padding:12px;margin-bottom:12px">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+      +'<span style="font-size:11px;font-weight:700;color:'+col+';text-transform:uppercase">Learner \u2014 '+decision+'</span>'
+      +'<span style="font-size:20px;font-weight:900;font-family:var(--mono);color:'+col+'">'+diffStr+'</span>'
+      +'<span style="font-size:10px;color:var(--muted);margin-left:auto">'+a.btN+' refills all-time</span>'
+    +'</div>'
+    +pHtml
+    +(periodMissed?'<div style="font-size:11px;color:var(--muted);margin-bottom:3px">Missed now: <span style="color:var(--gold)">'+periodMissed+'</span></div>':'')
+    +(allMissed&&allMissed!==periodMissed?'<div style="font-size:11px;color:var(--muted);margin-bottom:4px">Missed all-time: <span style="color:var(--muted)">'+allMissed+'</span></div>':'')
+    +(relief?'<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Penalty relief: <span style="color:var(--green)">'+relief+' \u2014 releasing suppression so next prediction gives fair chance</span></div>':'')
+    +'<div style="display:flex;gap:8px">'
+      +'<button class="btn btn-primary btn-sm" onclick="applyLearnerWeights()">Apply</button>'
+      +'<button class="btn btn-secondary btn-sm" onclick="dismissLearner()">Hold</button>'
+    +'</div>'
+  +'</div>';
+}
+
+// ════════════════════════════════════════════════════════════════
+// TRACK TAB — reads frozen predictions only
+// TRACK top uses getCurrentPred — same source as PREDICT
+// ════════════════════════════════════════════════════════════════
+var renderTrackTab = function(){
+  renderTrackScore();
+  renderTrackHistory();
+  renderBestPredList();
+  renderModelHistory();
+}
+
+// ── TRACK top — single source, same as PREDICT ───────────────
+var renderTrackScore = function(){
+  var el=document.getElementById('track-score-panel');
+  if(!el||!activeShop) return;
+  db=loadDB();
+  var preds=shopPreds(activeShop);
+
+  // Hit/miss summary
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  var liveRes=resolved.filter(function(p){return p.liveResolved;});
+  var statsBase=liveRes.length>=3?liveRes:resolved;
+  var totalH=0,totalP=0;
+  statsBase.forEach(function(p){Object.values(p.outcome).forEach(function(v){totalP++;if(v==='hit')totalH++;});});
+  var pct=totalP>0?Math.round(totalH/totalP*100):0;
+  var ms=typeof shopModelStatus!=='undefined'?shopModelStatus(activeShop):{level:'low'};
+  var confCls=ms.level==='high'?'conf-high':ms.level==='moderate'||ms.level==='med'?'conf-mod':'conf-low';
+
+  var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+    +'<span class="conf-badge '+confCls+'">'+verdictLabel(ms.level)+'</span>'
+    +'<span style="font-size:12px;color:var(--muted)">'+pct+'% hit \u00B7 '+resolved.length+' predictions'+(liveRes.length<resolved.length?' ('+liveRes.length+' real)':'')+'</span>'
+  +'</div>';
+
+  // ── Single source of truth — same getCurrentPred as PREDICT ──
+  var cp=getCurrentPred(preds);
+  var frozenPred=cp.pred;
+  var predState=cp.state;
+
+  if(frozenPred){
+    // Confidence number
+    var fc=frozenPred.frozenConf;
+    if(fc&&fc.score){
+      var fgCol=fc.grade==='A'||fc.grade==='B'?'var(--green)':fc.grade==='C'?'var(--gold)':'var(--red)';
+      html='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+        +'<span style="font-size:32px;font-weight:900;font-family:var(--mono);color:'+fgCol+'">'+fc.score+'</span>'
+        +'<div><div style="font-size:14px;font-weight:700;color:'+fgCol+'">Grade '+fc.grade+'</div>'
+          +'<div style="font-size:11px;color:var(--muted)">Refill confidence'+(fc.adapted?' <span style="color:var(--green)">&#x2605; adapted</span>':'')+'</div>'
+        +'</div>'
+        +'<span class="conf-badge '+confCls+'" style="margin-left:auto">'+verdictLabel(ms.level)+'</span>'
+      +'</div>';
+    }
+
+    // Code grades — from frozenCodeData, compute if missing
+    var frozen=frozenPred.frozenScores||frozenPred.scores||{};
+    var fcd=frozenPred.frozenCodeData||{};
+    var top5=frozenPred.predictedCodes||[];
+    var fullMax=Math.max.apply(null,Object.values(frozen).concat([0.001]));
+    // If frozenCodeData empty, compute from current entries
+    if(!Object.keys(fcd).length){
+      var allE=shopEntries(activeShop);
+      var allP=shopPreds(activeShop);
+      var wts=frozenPred.weightsAtTime||getWeights(activeShop);
+      var sByCode={};
+      if(frozenPred.frozenSnapshots){
+        var isC2=!!(frozenPred.frozenSnapshots&&frozenPred.modelVersion);
+        var rSnap2=getSnapshotForPred(frozenPred);
+        sByCode=decompressSnap(rSnap2,isC2);
+      }
+      top5.forEach(function(c){
+        var pct=Math.round((frozen[c]||0)/fullMax*100);
+        var snap=sByCode[c]||{};
+        var g=allE.length>=3
+          ?buildCodeConfidenceGrade(c,snap,wts,allE,allP,activeShop,pct)
+          :{grade:'N',col:'var(--muted)',adapted:false};
+        fcd[c]={grade:g.grade,gradeCol:g.col,adapted:!!g.adapted,combined:pct,obsState:'idle'};
+      });
+    }
+    var gradeLabel=predState==='liveResolved'
+      ?'Last prediction \u00B7 tested '+(frozenPred.actualDate||'').slice(5)
+      :'Frozen prediction grades';
+    html+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">'+gradeLabel+'</div>';
+    // Sort by grade before display
+    var gradeOrdT={A:0,B:1,C:2,D:3,N:4};
+    var top5sorted=top5.slice().sort(function(a,b){
+      var da=fcd[a]||{}; var db4=fcd[b]||{};
+      var ao=gradeOrdT[da.grade]!==undefined?gradeOrdT[da.grade]:5;
+      var bo=gradeOrdT[db4.grade]!==undefined?gradeOrdT[db4.grade]:5;
+      if(ao!==bo) return ao-bo;
+      return (db4.combined||0)-(da.combined||0);
+    });
+    html+=top5sorted.map(function(c){
+      var d=fcd[c]||{};
+      var combined=d.effectivePct!==undefined?d.effectivePct:d.combined!==undefined?d.combined:Math.round((frozen[c]||0)/fullMax*100);
+      var combinedCol=combined>=60?'var(--green)':combined>=35?'var(--gold)':'var(--red)';
+      var gradeStr=d.grade||'N';
+      var gradeCol=d.gradeCol||'var(--muted)';
+      var adapted=!!d.adapted;
+      var obsRaw=d.obsState||'idle';
+      var obsLabel=obsRaw==='confirmed'?'CONF':obsRaw==='watching'?'WATCH':obsRaw==='overdue'?'OVRD':obsRaw==='recovering'?'REC':'';
+      var obsCol=obsRaw==='confirmed'?'var(--green)':obsRaw==='overdue'?'var(--red)':'var(--gold)';
+      var obsHtml=obsLabel?'<span style="font-size:8px;color:'+obsCol+';margin-left:2px">'+obsLabel+'</span>':'';
+      var topDriving=d.topDriving||'';
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)">'
+        +'<span class="mono" style="font-weight:900;min-width:28px;color:var(--accent)">'+c+'</span>'
+        +'<span style="font-size:11px;font-weight:900;font-family:var(--mono);color:'+gradeCol+'">['+gradeStr+']'+(adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')+obsHtml+'</span>'
+        +'<div style="flex:1;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden"><div style="width:'+combined+'%;height:100%;background:'+combinedCol+';border-radius:2px"></div></div>'
+        +'<span style="font-size:11px;font-family:var(--mono);color:'+combinedCol+';font-weight:700">'+combined+'%</span>'
+        +(topDriving?'<span style="font-size:9px;color:var(--muted);white-space:nowrap">'+topDriving+'</span>':'')
+      +'</div>';
+    }).join('');
+  }
+
+  // Obs window count
+  var obs=db.shops[activeShop]&&db.shops[activeShop].obsWindow||{};
+  var obsCount=Object.values(obs).filter(function(v){return v&&v.state&&v.state!=='idle';}).length;
+  var obsCnt=document.getElementById('obs-window-count');
+  if(obsCnt) obsCnt.textContent=obsCount;
+
+  el.innerHTML=html;
+}
+
+// ── TRACK history — reads frozen resolved predictions ─────────
+var renderTrackHistory = function(){
+  var chartEl=document.getElementById('track-accuracy-chart');
+  var histEl=document.getElementById('track-history');
+  if(!activeShop) return;
+  db=loadDB();
+  var preds=shopPreds(activeShop);
+
+  var resolved=preds.filter(function(p){return p.status!=='pending'&&p.outcome;});
+  resolved=resolved.slice().sort(function(a,b){return (a.actualDate||a.createdDate||'').localeCompare(b.actualDate||b.createdDate||'');});
+  var liveRes=resolved.filter(function(p){return p.liveResolved;});
+  var statsBase=liveRes.length>=3?liveRes:resolved;
+
+  if(!resolved.length){
+    if(chartEl) chartEl.innerHTML='';
+    if(histEl)  histEl.innerHTML='<div class="empty"><div class="empty-icon">&#x1F4CA;</div><p>No predictions yet. Enter refills and rebuild.</p></div>';
+    return;
+  }
+
+  // Stats
+  var totalH=0,totalP=0;
+  statsBase.forEach(function(p){Object.values(p.outcome).forEach(function(v){totalP++;if(v==='hit')totalH++;});});
+  var pct=totalP>0?Math.round(totalH/totalP*100):0;
+  var col=pct>=60?'var(--green)':pct>=33?'var(--gold)':'var(--red)';
+  var last5=statsBase.slice(-5),prior5=statsBase.slice(-10,-5);
+  var l5=bRate(last5),p5=bRate(prior5),delta=l5!==null&&p5!==null?l5-p5:null;
+
+  if(chartEl){
+    var bars=resolved.slice(-20).map(function(p){
+      var h=Object.values(p.outcome).filter(function(v){return v==='hit';}).length;
+      var r=Math.round(h/p.predictedCodes.length*100);
+      var bc=r===100?'var(--green)':r>=60?'var(--teal)':r>=33?'var(--gold)':'var(--red)';
+      return '<div class="acc-bar" style="height:'+Math.max(4,Math.round(r*0.44))+'px;background:'+bc+'" title="'+r+'%"></div>';
+    }).join('');
+    chartEl.innerHTML='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+      +'<span style="font-size:24px;font-weight:900;font-family:var(--mono);color:'+col+'">'+pct+'%</span>'
+      +'<div style="font-size:11px;color:var(--muted)">code hit rate \u00B7 '+resolved.length+' predictions'+(liveRes.length<resolved.length?' ('+liveRes.length+' real)':'')
+        +(l5!==null?'<br>last 5: <strong style="color:'+(l5>=pct?'var(--green)':'var(--gold)')+'">'+l5+'%</strong>':'')
+        +(p5!==null?' \u00B7 prior 5: <strong>'+p5+'%</strong>':'')
+        +(delta!==null?' <span style="color:'+(delta>3?'var(--green)':delta<-3?'var(--red)':'var(--muted)')+'">'+( delta>0?'\u2191':'\u2193')+(delta>0?'+':'')+delta+'%</span>':'')
+      +'</div></div><div class="acc-chart">'+bars+'</div>';
+  }
+
+  if(!histEl) return;
+
+  // ── History card — reads frozenCodeData only, no computation ──
+  function predCard(p){
+    var h=Object.values(p.outcome).filter(function(v){return v==='hit';}).length;
+    var t=p.predictedCodes.length;
+    var r=Math.round(h/t*100);
+    var outcomeStr=r===100?'&#x2705; Hit':r>0?'&#x26A1; Partial':'&#x274C; Miss';
+    var outcomeCol=r===100?'var(--green)':r>0?'var(--gold)':'var(--red)';
+    var date=(p.actualDate||p.createdDate||'').slice(5);
+    var fcd=p.frozenCodeData||{};
+    var frozen=p.frozenScores||p.scores||{};
+    var maxS=Math.max.apply(null,Object.values(frozen).concat([0.001]));
+    // If frozenCodeData empty, compute grades from available data
+    if(!Object.keys(fcd).length){
+      var allE2=shopEntries(activeShop);
+      var allP2=shopPreds(activeShop);
+      var wts2=p.weightsAtTime||getWeights(activeShop);
+      var snap2={};
+      if(p.frozenSnapshots){
+        var isC3=!!(p.frozenSnapshots&&p.modelVersion);
+        var rSnap3=getSnapshotForPred(p);
+        snap2=decompressSnap(rSnap3,isC3);
+      }
+      p.predictedCodes.forEach(function(c){
+        var pct=Math.round((frozen[c]||0)/maxS*100);
+        var g=allE2.length>=3
+          ?buildCodeConfidenceGrade(c,snap2[c]||{},wts2,allE2,allP2,activeShop,pct)
+          :{grade:'N',col:'var(--muted)',adapted:false};
+        fcd[c]={grade:g.grade,gradeCol:g.col,adapted:!!g.adapted,combined:pct,obsState:'idle'};
+      });
+    }
+    // Sort codes by grade for display
+    var gradeOrd2={A:0,B:1,C:2,D:3,N:4};
+    var cardCodes=p.predictedCodes.slice().sort(function(a,b){
+      var da=fcd[a]||{}; var db3=fcd[b]||{};
+      var ao=gradeOrd2[da.grade]!==undefined?gradeOrd2[da.grade]:5;
+      var bo=gradeOrd2[db3.grade]!==undefined?gradeOrd2[db3.grade]:5;
+      if(ao!==bo) return ao-bo;
+      return (db3.combined||0)-(da.combined||0);
+    });
+
+    var rows=cardCodes.map(function(c){
+      var d=fcd[c]||{};
+      var combined=d.effectivePct!==undefined?d.effectivePct:d.combined!==undefined?d.combined:Math.round((frozen[c]||0)/maxS*100);
+      var combinedCol=combined>=60?'var(--green)':combined>=35?'var(--gold)':'var(--red)';
+      var gradeStr=d.grade||'N';
+      var gradeCol=d.gradeCol||'var(--muted)';
+      var adapted=!!d.adapted;
+      var isHit=p.outcome[c]==='hit'; var isMiss=p.outcome[c]==='miss';
+      var codeCol=isHit?'var(--green)':isMiss?'var(--red)':'var(--text)';
+      var icon=isHit?'&#x2713;':isMiss?'&#x2717;':'\u00B7';
+      var iconCol=isHit?'var(--green)':'var(--red)';
+      var obsRaw=d.obsState||'idle';
+      var obsTag=obsRaw==='confirmed'?'<span style="font-size:8px;color:var(--green);margin-left:2px">CONF</span>'
+        :obsRaw==='watching'?'<span style="font-size:8px;color:var(--gold);margin-left:2px">WATCH</span>'
+        :obsRaw==='overdue'?'<span style="font-size:8px;color:var(--red);margin-left:2px">OVRD</span>':'';
+      return '<div style="display:flex;align-items:center;gap:5px;padding:3px 0">'
+        +'<span style="min-width:16px"></span>'
+        +'<span class="mono" style="font-size:13px;font-weight:900;min-width:28px;color:'+codeCol+'">'+c+'</span>'
+        +'<span style="font-size:11px;font-weight:700;color:'+iconCol+'">'+icon+'</span>'
+        +'<span style="font-size:10px;font-weight:900;font-family:var(--mono);color:'+gradeCol+'">['+gradeStr+']'+(adapted?'<sup style="color:var(--green);font-size:7px">&#x2605;</sup>':'')+obsTag+'</span>'
+        +'<div style="flex:1;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden"><div style="width:'+combined+'%;height:100%;background:'+(isHit?'var(--green)':isMiss?'var(--red)':combinedCol)+';border-radius:2px"></div></div>'
+        +'<span style="font-size:10px;font-family:var(--mono);color:'+combinedCol+';font-weight:700;min-width:28px;text-align:right">'+combined+'%</span>'
+      +'</div>';
+    }).join('');
+
+    var allEntries4=shopEntries(activeShop);
+    var surprises=(p.surpriseCodes||[]).filter(function(c){
+      if(p.predictedCodes.indexOf(c)>-1) return false;
+      // Only show codes with enough history to have been predicted
+      var freq=allEntries4.filter(function(e){return e.date<=p.createdDate&&e.codes.indexOf(c)>-1;}).length;
+      return freq>=3;
+    }).slice(0,5);
+    var surpriseHtml=surprises.length
+      ?'<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);font-size:10px;color:var(--muted)">&#x1F3AF; Missed: '
+        +surprises.map(function(c){return '<span class="mono" style="color:var(--gold)">'+c+'</span>';}).join(' ')+'</div>':'';
+
+    return '<div style="padding:10px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
+        +'<span class="mono muted" style="font-size:11px">'+date+'</span>'
+        +'<span style="font-size:12px;font-weight:700;color:'+outcomeCol+'">'+outcomeStr+'</span>'
+        +'<span class="mono" style="font-size:12px;font-weight:900;color:'+outcomeCol+'">'+r+'%</span>'
+      +'</div>'+rows+surpriseHtml
+    +'</div>';
+  }
+
+  var revList=resolved.slice().reverse();
+  var html=predCard(revList[0]);
+  var rest=revList.slice(1);
+  if(rest.length){
+    var priorCnt=document.getElementById('prior-count');
+    if(priorCnt) priorCnt.textContent=rest.length;
+    html+='<div id="prior-predictions-panel" style="margin-top:8px">'
+      +rest.slice(0,5).map(predCard).join('')
+      +(rest.length>5
+        ?'<div id="prior-rest" style="display:none">'+rest.slice(5).map(predCard).join('')+'</div>'
+          +'<button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="document.getElementById(\'prior-rest\').style.display=\'\';this.style.display=\'none\'">Show all '+rest.length+'</button>'
+        :'')
+    +'</div>';
+  }
+  histEl.innerHTML=html;
+}
+
+// ── Optimize / Anchor — reads btCache only ────────────────────
+var renderBestPredList = function(){
+  var el=document.getElementById('best-pred-list');
+  if(!el||!activeShop) return;
+  db=loadDB();
+  var preds=shopPreds(activeShop).filter(function(p){
+    return p.status!=='pending'&&p.outcome&&p.weightsAtTime&&Object.keys(p.weightsAtTime).length>0;
+  });
+  if(!preds.length){el.innerHTML='<div class="muted" style="font-size:12px">No resolved predictions yet</div>'; return;}
+  function hr(p){var h=0,t=0;Object.values(p.outcome).forEach(function(v){t++;if(v==='hit')h++;});return t?h/t:0;}
+  var cands=preds.slice().sort(function(a,b){return hr(b)-hr(a);}).slice(0,5);
+  el.innerHTML=cands.map(function(p){
+    var h=Object.values(p.outcome).filter(function(v){return v==='hit';}).length;
+    var d=(p.actualDate||p.createdDate||'').slice(5);
+    var bt=p.btCache;
+    var btHtml=bt
+      ?'<span style="font-family:var(--mono);font-weight:900;color:var(--text)">'+bt.rate+'%</span> <span style="font-size:10px;color:var(--muted)">'+bt.n+' refills</span> <span style="color:'+(bt.diff>0?'var(--green)':bt.diff<0?'var(--red)':'var(--muted)')+';font-size:10px">'+(bt.diff>0?'\u2191+':bt.diff<0?'\u2193':'')+bt.diff+'%</span>'
+      :'<span style="font-size:10px;color:var(--muted)">run Rebuild to compute\u2026</span>';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="flex:1"><div style="font-size:10px;color:var(--muted);margin-bottom:1px">Backtest '+btHtml+'</div>'
+        +'<div><span class="mono" style="font-size:11px;color:var(--muted)">'+h+'/'+p.predictedCodes.length+' on '+d+'</span> <span style="font-size:10px;color:var(--muted)">\u00B7 '+p.predictedCodes.join(' ')+'</span></div>'
+      +'</div>'
+      +'<button class="btn btn-secondary btn-sm" onclick="useBestPredModel(\''+p.id+'\')">Use this</button>'
+    +'</div>';
+  }).join('');
+}
+
+// ── Model history ─────────────────────────────────────────────
+var renderModelHistory = function(){
+  var el=document.getElementById('model-history-list');
+  if(!el||!activeShop) return;
+  db=loadDB();
+  var hist=(db.shops[activeShop]&&db.shops[activeShop].modelHistory)||[];
+  if(!hist.length){el.innerHTML='<div class="muted" style="font-size:12px">No model changes yet</div>'; return;}
+  el.innerHTML=hist.slice().reverse().slice(0,10).map(function(h){
+    var diff=h.btDiff||0;
+    var col=diff>0?'var(--green)':diff<0?'var(--red)':'var(--muted)';
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--muted)">'+(h.date||'').slice(5)+'</span><span style="font-size:11px;font-weight:700;color:'+col+'">'+(diff>0?'\u2191+':'\u2193')+diff+'%</span></div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+(h.reason||'Model updated')+'</div>'
+    +'</div>';
+  }).join('');
+}
+
+// ── Learner actions ───────────────────────────────────────────
+var applyLearnerWeights = function(){
+  if(!activeShop) return;
+  db=loadDB();
+  var a=db.shops[activeShop].learnerAlert;
+  if(!a||!a.learnedW) return;
+  snapshotCurrentWeights(activeShop);
+  db=loadDB();
+  db.shops[activeShop].weights=Object.assign({},a.learnedW);
+  db.shops[activeShop].learnerAlert=Object.assign({},a,{applied:true,needsAlert:false});
+  // Apply obs penalty relief for proposed codes — only on user approval
+  var relief=a.proposedRelief||[];
+  if(relief.length){
+    var obs=db.shops[activeShop].obsWindow||{};
+    relief.forEach(function(code){
+      if(obs[code]&&obs[code].penaltyApplied&&obs[code].penaltyApplied<1.0){
+        obs[code].penaltyApplied=OBS_SOFT_PENALTY;
+        obs[code].state='recovering';
+      }
+    });
+    db.shops[activeShop].obsWindow=obs;
+  }
+  saveDB(db);
+  showToast('Weights updated \u2014 rebuilding\u2026','ok');
+  rebuildActiveShop();
+}
+
+var dismissLearner = function(){
+  if(!activeShop) return;
+  db=loadDB();
+  if(db.shops[activeShop]) db.shops[activeShop].learnerAlert=null;
+  saveDB(db);
+  renderLearnerAlert(activeShop);
+}
+
+// ── Init ──────────────────────────────────────────────────────
+var initApp = function(){
+  db=loadDB();
+  renderShopPills();
+  var shops=Object.keys(db.shops||{});
+  if(shops.length){
+    activeShop=shops[0];
+    renderShopPills();
+    var btn=document.getElementById('rebuild-active-btn');
+    if(btn) btn.style.display='inline-flex';
+  }
+  showTab('data');
+}
+
+window.addEventListener('DOMContentLoaded', initApp);
+
 </script>
 </body>
 </html>
